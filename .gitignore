@@ -27,3 +27,6 @@ npm-debug.log*
 
 # Cloudflare
 .wrangler/
+
+# Local status file (for Claude Code context)
+STATUS.md
