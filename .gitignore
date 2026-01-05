@@ -2,6 +2,7 @@
 /target
 /dist
 /pkg
+/www/pkg
 *.wasm
 
 # Dependencies

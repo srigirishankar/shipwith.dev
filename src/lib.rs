@@ -1,5 +1,11 @@
 use wasm_bindgen::prelude::*;
-use web_sys::window;
+
+// Import JavaScript functions from scene.js
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_name = initScene)]
+    fn init_scene();
+}
 
 #[wasm_bindgen]
 pub struct App {
@@ -25,14 +31,9 @@ impl App {
     pub fn start(&mut self) -> Result<(), JsValue> {
         log::info!("Starting application...");
 
-        let window = window().ok_or("No window")?;
-        let document = window.document().ok_or("No document")?;
-
-        let canvas = document
-            .get_element_by_id("scene")
-            .ok_or("No canvas element")?;
-
-        log::info!("Canvas found: {:?}", canvas.tag_name());
+        // Initialize Three.js scene
+        init_scene();
+        log::info!("Three.js scene initialized");
 
         self.initialized = true;
         log::info!("Application started successfully");

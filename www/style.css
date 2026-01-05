@@ -211,6 +211,92 @@ body {
     display: none;
 }
 
+#coming-soon {
+    position: fixed;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90%;
+    max-width: 480px;
+    background: var(--panel-bg);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    padding: 1.5rem;
+    z-index: 150;
+    backdrop-filter: blur(20px);
+    text-align: center;
+}
+
+#coming-soon h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--cf-orange);
+    margin-bottom: 0.25rem;
+}
+
+#coming-soon .tagline {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+}
+
+#coming-soon .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(246, 130, 31, 0.15);
+    padding: 0.35rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    color: var(--cf-orange);
+    margin-bottom: 1rem;
+}
+
+#coming-soon .status-dot {
+    width: 8px;
+    height: 8px;
+    background: var(--cf-orange);
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+#coming-soon .details {
+    text-align: left;
+    margin-bottom: 1rem;
+}
+
+#coming-soon .details p {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+    line-height: 1.5;
+}
+
+#coming-soon .details strong {
+    color: var(--text-primary);
+}
+
+#coming-soon .github-link {
+    display: inline-block;
+    color: var(--cf-orange);
+    text-decoration: none;
+    font-size: 0.85rem;
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--cf-orange);
+    border-radius: 6px;
+    transition: all 0.2s;
+}
+
+#coming-soon .github-link:hover {
+    background: var(--cf-orange);
+    color: white;
+}
+
 @media (max-width: 768px) {
     #metrics-bar {
         gap: 1rem;
@@ -225,5 +311,18 @@ body {
         width: calc(100% - 40px);
         right: 20px;
         left: 20px;
+    }
+
+    #coming-soon {
+        bottom: 80px;
+        padding: 1rem;
+    }
+
+    #coming-soon h2 {
+        font-size: 1.1rem;
+    }
+
+    #coming-soon .details p {
+        font-size: 0.8rem;
     }
 }
