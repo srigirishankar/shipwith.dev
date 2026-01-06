@@ -9,15 +9,32 @@ let isInitialized = false;
 let isExploded = false;
 
 // Component definitions with colors and positions
+// pos = assembled (compact 3D), exploded = architecture diagram (flat 2D)
 const COMPONENTS = [
-    { id: 'user', name: 'User', color: '#4CAF50', pos: { x: 0, y: 0.5, z: 4 } },
-    { id: 'browser', name: 'Browser', color: '#2196F3', pos: { x: 0, y: 0, z: 2 } },
-    { id: 'workers', name: 'CF Workers', color: '#F6821F', pos: { x: -1.2, y: 0, z: 0 } },
-    { id: 'pages', name: 'CF Pages', color: '#F6821F', pos: { x: 1.2, y: 0, z: 0 } },
-    { id: 'wasm', name: 'Rust/WASM', color: '#F6821F', pos: { x: -1.2, y: 0, z: -2 } },
-    { id: 'threejs', name: 'Three.js', color: '#333333', pos: { x: 1.2, y: 0, z: -2 } },
-    { id: 'kv', name: 'CF KV', color: '#9C27B0', pos: { x: -1.2, y: 0, z: -4 } },
-    { id: 'd1', name: 'CF D1', color: '#9C27B0', pos: { x: 1.2, y: 0, z: -4 } },
+    { id: 'user', name: 'User', color: '#4CAF50',
+      pos: { x: 0, y: 0.5, z: 4 },
+      exploded: { x: 0, y: 6, z: 0 } },
+    { id: 'browser', name: 'Browser', color: '#2196F3',
+      pos: { x: 0, y: 0, z: 2 },
+      exploded: { x: 0, y: 3.5, z: 0 } },
+    { id: 'workers', name: 'CF Workers', color: '#F6821F',
+      pos: { x: -1.2, y: 0, z: 0 },
+      exploded: { x: -3.5, y: 1, z: 0 } },
+    { id: 'pages', name: 'CF Pages', color: '#F6821F',
+      pos: { x: 1.2, y: 0, z: 0 },
+      exploded: { x: 3.5, y: 1, z: 0 } },
+    { id: 'wasm', name: 'Rust/WASM', color: '#F6821F',
+      pos: { x: -1.2, y: 0, z: -2 },
+      exploded: { x: 3.5, y: -1.5, z: 0 } },
+    { id: 'threejs', name: 'Three.js', color: '#333333',
+      pos: { x: 1.2, y: 0, z: -2 },
+      exploded: { x: 3.5, y: -4, z: 0 } },
+    { id: 'kv', name: 'CF KV', color: '#9C27B0',
+      pos: { x: -1.2, y: 0, z: -4 },
+      exploded: { x: -5, y: -1.5, z: 0 } },
+    { id: 'd1', name: 'CF D1', color: '#9C27B0',
+      pos: { x: 1.2, y: 0, z: -4 },
+      exploded: { x: -2, y: -1.5, z: 0 } },
 ];
 
 // Connection definitions (from -> to with labels)
@@ -85,7 +102,8 @@ function createComponent(comp) {
     mesh.userData = {
         id: comp.id,
         name: comp.name,
-        basePosition: { ...comp.pos }
+        basePosition: { ...comp.pos },
+        explodedPosition: { ...comp.exploded }
     };
 
     return mesh;
@@ -335,13 +353,12 @@ window.initButtons = function() {
     }
 };
 
-// Explode animation - spread components outward
+// Explode animation - arrange as architecture diagram
 function explodeComponents() {
     if (isExploded) return;
     isExploded = true;
 
-    const duration = 800;
-    const spreadFactor = 2.5;
+    const duration = 1000;
     const startTime = Date.now();
 
     // Store starting positions
@@ -351,15 +368,8 @@ function explodeComponents() {
         z: mesh.position.z
     }));
 
-    // Calculate target positions (spread from center)
-    const targetPositions = components.map(mesh => {
-        const base = mesh.userData.basePosition;
-        return {
-            x: base.x * spreadFactor,
-            y: base.y * spreadFactor + (base.z * 0.3), // Add vertical spread
-            z: base.z * spreadFactor
-        };
-    });
+    // Use explicit exploded positions for architecture diagram layout
+    const targetPositions = components.map(mesh => mesh.userData.explodedPosition);
 
     function step() {
         const elapsed = Date.now() - startTime;
@@ -379,8 +389,8 @@ function explodeComponents() {
     }
     step();
 
-    // Also zoom camera out
-    animateCamera({ x: 0, y: 4, z: 18 });
+    // Camera: front view to see flat diagram
+    animateCamera({ x: 0, y: 1, z: 16 });
 }
 
 // Reconstruct animation - bring components back together
