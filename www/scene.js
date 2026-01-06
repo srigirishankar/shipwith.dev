@@ -3,6 +3,8 @@
 
 let scene, camera, renderer, controls;
 let components = [];
+let connections = [];
+let particles = [];
 let isInitialized = false;
 let isExploded = false;
 
@@ -16,6 +18,17 @@ const COMPONENTS = [
     { id: 'threejs', name: 'Three.js', color: '#333333', pos: { x: 1.2, y: 0, z: -2 } },
     { id: 'kv', name: 'CF KV', color: '#9C27B0', pos: { x: -1.2, y: 0, z: -4 } },
     { id: 'd1', name: 'CF D1', color: '#9C27B0', pos: { x: 1.2, y: 0, z: -4 } },
+];
+
+// Connection definitions (from -> to with labels)
+const CONNECTIONS = [
+    { from: 'user', to: 'browser', label: 'HTTP', color: '#4CAF50' },
+    { from: 'browser', to: 'pages', label: 'Static', color: '#2196F3' },
+    { from: 'browser', to: 'workers', label: 'API', color: '#2196F3' },
+    { from: 'pages', to: 'wasm', label: 'WASM', color: '#F6821F' },
+    { from: 'wasm', to: 'threejs', label: 'Render', color: '#F6821F' },
+    { from: 'workers', to: 'kv', label: 'Cache', color: '#9C27B0' },
+    { from: 'workers', to: 'd1', label: 'SQL', color: '#9C27B0' },
 ];
 
 // Create a canvas texture with label
@@ -78,6 +91,96 @@ function createComponent(comp) {
     return mesh;
 }
 
+// Get component mesh by ID
+function getComponentById(id) {
+    return components.find(c => c.userData.id === id);
+}
+
+// Get component base position by ID
+function getBasePositionById(id) {
+    const comp = COMPONENTS.find(c => c.id === id);
+    return comp ? comp.pos : null;
+}
+
+// Create a curved connection line between two components
+function createConnection(connDef) {
+    const fromPos = getBasePositionById(connDef.from);
+    const toPos = getBasePositionById(connDef.to);
+    if (!fromPos || !toPos) return null;
+
+    // Create curve with control point for nice arc
+    const start = new THREE.Vector3(fromPos.x, fromPos.y, fromPos.z);
+    const end = new THREE.Vector3(toPos.x, toPos.y, toPos.z);
+
+    // Control point: midpoint + offset for curve
+    const mid = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
+    mid.y += 0.8; // Lift the curve up
+    mid.x += (end.x - start.x) * 0.2; // Slight horizontal offset
+
+    const curve = new THREE.QuadraticBezierCurve3(start, mid, end);
+    const points = curve.getPoints(32);
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+
+    const material = new THREE.LineBasicMaterial({
+        color: connDef.color,
+        transparent: true,
+        opacity: 0.6,
+        linewidth: 2
+    });
+
+    const line = new THREE.Line(geometry, material);
+    line.userData = {
+        from: connDef.from,
+        to: connDef.to,
+        label: connDef.label,
+        curve: curve,
+        baseFromPos: { ...fromPos },
+        baseToPos: { ...toPos }
+    };
+
+    return line;
+}
+
+// Create flowing particle for a connection
+function createParticle(connection) {
+    const geometry = new THREE.SphereGeometry(0.08, 8, 8);
+    const material = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.9
+    });
+    const particle = new THREE.Mesh(geometry, material);
+
+    // Random starting position along curve
+    particle.userData = {
+        connection: connection,
+        progress: Math.random(), // 0 to 1 along curve
+        speed: 0.003 + Math.random() * 0.002 // Varying speeds
+    };
+
+    return particle;
+}
+
+// Update connection curve based on current component positions
+function updateConnectionCurve(connection) {
+    const fromComp = getComponentById(connection.userData.from);
+    const toComp = getComponentById(connection.userData.to);
+    if (!fromComp || !toComp) return;
+
+    const start = fromComp.position.clone();
+    const end = toComp.position.clone();
+
+    const mid = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
+    mid.y += 0.8 * (isExploded ? 2 : 1);
+    mid.x += (end.x - start.x) * 0.2;
+
+    const curve = new THREE.QuadraticBezierCurve3(start, mid, end);
+    const points = curve.getPoints(32);
+
+    connection.geometry.setFromPoints(points);
+    connection.userData.curve = curve;
+}
+
 // Initialize the Three.js scene
 window.initScene = function() {
     if (isInitialized) {
@@ -128,6 +231,24 @@ window.initScene = function() {
     });
     console.log(`Added ${components.length} components to scene`);
 
+    // Create all connections
+    CONNECTIONS.forEach(connDef => {
+        const line = createConnection(connDef);
+        if (line) {
+            scene.add(line);
+            connections.push(line);
+
+            // Add 2-3 particles per connection
+            const numParticles = 2 + Math.floor(Math.random() * 2);
+            for (let i = 0; i < numParticles; i++) {
+                const particle = createParticle(line);
+                scene.add(particle);
+                particles.push(particle);
+            }
+        }
+    });
+    console.log(`Added ${connections.length} connections with ${particles.length} particles`);
+
     // Handle resize
     window.addEventListener('resize', onResize);
 
@@ -158,6 +279,28 @@ function animate() {
     // Make components face the camera (billboard effect)
     components.forEach(mesh => {
         mesh.lookAt(camera.position);
+    });
+
+    // Update connection curves to follow component positions
+    connections.forEach(conn => {
+        updateConnectionCurve(conn);
+    });
+
+    // Animate particles along their curves
+    particles.forEach(particle => {
+        const conn = particle.userData.connection;
+        const curve = conn.userData.curve;
+        if (!curve) return;
+
+        // Move particle along curve
+        particle.userData.progress += particle.userData.speed;
+        if (particle.userData.progress > 1) {
+            particle.userData.progress = 0;
+        }
+
+        // Get position on curve
+        const pos = curve.getPoint(particle.userData.progress);
+        particle.position.copy(pos);
     });
 
     renderer.render(scene, camera);
