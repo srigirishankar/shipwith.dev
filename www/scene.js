@@ -481,24 +481,16 @@ function createConnection(connDef) {
 
     const line = new THREE.Line(geometry, material);
 
-    // Create label sprite overlaying destination panel
-    const labelSprite = createLabelSprite(connDef.label, connDef.color);
-    // Position at destination with slight offset toward source
-    const destPoint = curve.getPoint(0.9);
-    labelSprite.position.copy(destPoint);
-    labelSprite.position.z += 0.1; // Slightly in front of panel
-
     line.userData = {
         from: connDef.from,
         to: connDef.to,
         label: connDef.label,
         curve: curve,
         baseFromPos: { ...fromPos },
-        baseToPos: { ...toPos },
-        labelSprite: labelSprite
+        baseToPos: { ...toPos }
     };
 
-    return { line, labelSprite };
+    return { line };
 }
 
 // Create flowing particle for a connection
@@ -539,13 +531,6 @@ function updateConnectionCurve(connection) {
 
     connection.geometry.setFromPoints(points);
     connection.userData.curve = curve;
-
-    // Update label sprite to overlay destination panel
-    if (connection.userData.labelSprite) {
-        const destPoint = curve.getPoint(0.9);
-        connection.userData.labelSprite.position.copy(destPoint);
-        connection.userData.labelSprite.position.z += 0.1;
-    }
 }
 
 // Track mouse position for raycasting
@@ -863,9 +848,8 @@ window.initScene = function() {
     CONNECTIONS.forEach(connDef => {
         const result = createConnection(connDef);
         if (result) {
-            const { line, labelSprite } = result;
+            const { line } = result;
             scene.add(line);
-            scene.add(labelSprite);
             connections.push(line);
 
             // Add 2-3 particles per connection
