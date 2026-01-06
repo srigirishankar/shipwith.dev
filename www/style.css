@@ -124,16 +124,14 @@ body {
 
 #cost-matrix {
     position: fixed;
-    top: 50%;
-    right: 1.5rem;
-    transform: translateY(-50%);
+    bottom: 1.5rem;
+    left: 1.5rem;
     padding: 1rem;
     background: rgba(29, 29, 29, 0.9);
     backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 12px;
     z-index: 100;
-    transition: opacity 0.3s ease;
 }
 
 #cost-matrix table {
