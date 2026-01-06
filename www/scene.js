@@ -51,6 +51,70 @@ const CONNECTIONS = [
     { from: 'workers', to: 'd1', label: 'SQL', color: '#9C27B0' },
 ];
 
+// Component info database with descriptions, docs, and cloud alternatives
+const COMPONENT_INFO = {
+    user: {
+        description: 'You! The person interacting with this visualization.',
+        reasons: ['Every architecture starts with a user', 'Understanding user flow is key to good design'],
+        docs: null,
+        alternatives: null
+    },
+    browser: {
+        description: 'The web browser rendering this visualization using WebGL.',
+        reasons: ['Universal access - no install needed', 'Sandboxed security model', 'WebGL for hardware-accelerated 3D'],
+        docs: 'https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API',
+        alternatives: null
+    },
+    workers: {
+        description: 'Serverless functions running at the edge in 300+ locations worldwide.',
+        reasons: ['0ms cold starts', 'Runs within 50ms of 95% of internet users', 'Free tier: 100k requests/day'],
+        docs: 'https://developers.cloudflare.com/workers/',
+        alternatives: {
+            gcp: { name: 'Cloud Run functions', url: 'https://cloud.google.com/functions/docs', description: 'Serverless compute for event-driven functions' },
+            aws: { name: 'Lambda@Edge', url: 'https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/lambda-at-the-edge.html', description: 'Code at CloudFront edge locations' }
+        }
+    },
+    pages: {
+        description: 'Static site hosting with automatic Git deployments and global CDN.',
+        reasons: ['Instant global cache invalidation', 'Automatic HTTPS and HTTP/3', 'Preview URLs for every PR'],
+        docs: 'https://developers.cloudflare.com/pages/',
+        alternatives: {
+            gcp: { name: 'Firebase Hosting', url: 'https://firebase.google.com/docs/hosting', description: 'Fast CDN hosting for web apps' },
+            aws: { name: 'Amplify Hosting', url: 'https://docs.aws.amazon.com/amplify/latest/userguide/welcome.html', description: 'Git-based CI/CD hosting' }
+        }
+    },
+    wasm: {
+        description: 'This visualization is written in Rust and compiled to WebAssembly.',
+        reasons: ['Near-native execution speed', 'Memory safety without garbage collection', 'Small binary size'],
+        docs: 'https://rustwasm.github.io/docs/book/',
+        alternatives: null
+    },
+    threejs: {
+        description: 'Industry-standard 3D graphics library powering the visualization.',
+        reasons: ['Mature ecosystem', 'Hardware-accelerated WebGL', 'Great WASM interop'],
+        docs: 'https://threejs.org/docs/',
+        alternatives: null
+    },
+    kv: {
+        description: 'Global key-value storage with millisecond reads at the edge.',
+        reasons: ['Eventually consistent, perfect for caching', 'Reads from nearest edge location', 'Simple key-value API'],
+        docs: 'https://developers.cloudflare.com/kv/',
+        alternatives: {
+            gcp: { name: 'Firestore', url: 'https://firebase.google.com/docs/firestore', description: 'NoSQL serverless database' },
+            aws: { name: 'DynamoDB', url: 'https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Introduction.html', description: 'Managed NoSQL key-value store' }
+        }
+    },
+    d1: {
+        description: 'SQLite at the edge. Full relational database without managing servers.',
+        reasons: ['Familiar SQL interface', 'Automatic replication', 'Generous free tier'],
+        docs: 'https://developers.cloudflare.com/d1/',
+        alternatives: {
+            gcp: { name: 'Cloud SQL', url: 'https://cloud.google.com/sql/docs', description: 'Managed MySQL/PostgreSQL' },
+            aws: { name: 'Aurora Serverless', url: 'https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.html', description: 'On-demand autoscaling database' }
+        }
+    }
+};
+
 // Create a canvas texture with label
 function createLabelTexture(name, color) {
     const canvas = document.createElement('canvas');
@@ -68,6 +132,17 @@ function createLabelTexture(name, color) {
     ctx.strokeStyle = 'rgba(255,255,255,0.3)';
     ctx.lineWidth = 4;
     ctx.stroke();
+
+    // Info indicator (small "i" in bottom-right corner)
+    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    ctx.beginPath();
+    ctx.arc(220, 220, 16, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = color;
+    ctx.font = 'bold 18px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('i', 220, 221);
 
     // Text
     ctx.fillStyle = '#ffffff';
@@ -216,6 +291,52 @@ function onClick(event) {
     if (intersects.length > 0) {
         const clickedComponent = intersects[0].object;
         console.log('Clicked component:', clickedComponent.userData.id);
+        showInfoPanel(clickedComponent.userData.id);
+    }
+}
+
+// Show info panel for a component
+function showInfoPanel(componentId) {
+    const panel = document.getElementById('info-panel');
+    if (!panel) return;
+
+    const comp = COMPONENTS.find(c => c.id === componentId);
+    const info = COMPONENT_INFO[componentId];
+    if (!comp || !info) return;
+
+    // Populate panel
+    document.getElementById('panel-title').textContent = comp.name;
+    document.getElementById('panel-description').textContent = info.description;
+
+    // Populate reasons list
+    const reasonsList = document.getElementById('panel-reasons-list');
+    reasonsList.innerHTML = '';
+    info.reasons.forEach(reason => {
+        const li = document.createElement('li');
+        li.textContent = reason;
+        reasonsList.appendChild(li);
+    });
+
+    // Setup docs link
+    const docsLink = document.getElementById('panel-docs-link');
+    if (info.docs) {
+        docsLink.href = info.docs;
+        docsLink.target = '_blank';
+        docsLink.rel = 'noopener noreferrer';
+        docsLink.style.display = 'inline';
+    } else {
+        docsLink.style.display = 'none';
+    }
+
+    // Show panel
+    panel.classList.remove('hidden');
+}
+
+// Hide info panel
+function hideInfoPanel() {
+    const panel = document.getElementById('info-panel');
+    if (panel) {
+        panel.classList.add('hidden');
     }
 }
 
@@ -361,6 +482,7 @@ window.getRenderer = function() { return renderer; };
 window.initButtons = function() {
     const btnDeconstruct = document.getElementById('btn-deconstruct');
     const btnReconstruct = document.getElementById('btn-reconstruct');
+    const btnClosePanel = document.getElementById('close-panel');
 
     if (btnDeconstruct) {
         btnDeconstruct.addEventListener('click', () => {
@@ -377,6 +499,12 @@ window.initButtons = function() {
             reconstructComponents();
             btnReconstruct.classList.add('hidden');
             btnDeconstruct.classList.remove('hidden');
+        });
+    }
+
+    if (btnClosePanel) {
+        btnClosePanel.addEventListener('click', () => {
+            hideInfoPanel();
         });
     }
 };
