@@ -342,7 +342,7 @@ function createConnection(connDef) {
 
     // Create label sprite at curve midpoint
     const labelSprite = createLabelSprite(connDef.label, connDef.color);
-    const labelPoint = curve.getPoint(0.35); // Position closer to source, not midpoint
+    const labelPoint = curve.getPoint(0.5); // Midpoint between panels
     labelSprite.position.copy(labelPoint);
     labelSprite.position.y += 0.5; // Offset above the curve
 
@@ -400,7 +400,7 @@ function updateConnectionCurve(connection) {
 
     // Update label sprite position to curve midpoint
     if (connection.userData.labelSprite) {
-        const labelPoint = curve.getPoint(0.35);
+        const labelPoint = curve.getPoint(0.5);
         connection.userData.labelSprite.position.copy(labelPoint);
         connection.userData.labelSprite.position.y += 0.5;
     }
