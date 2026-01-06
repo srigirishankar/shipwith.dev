@@ -8,6 +8,9 @@ let particles = [];
 let isInitialized = false;
 let isExploded = false;
 
+// Raycasting for click detection
+let raycaster, mouse;
+
 // Component definitions with colors and positions
 // pos = assembled (compact 3D), exploded = architecture diagram (flat 2D)
 const COMPONENTS = [
@@ -199,6 +202,23 @@ function updateConnectionCurve(connection) {
     connection.userData.curve = curve;
 }
 
+// Track mouse position for raycasting
+function onMouseMove(event) {
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+}
+
+// Handle click - raycast to find component
+function onClick(event) {
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObjects(components);
+
+    if (intersects.length > 0) {
+        const clickedComponent = intersects[0].object;
+        console.log('Clicked component:', clickedComponent.userData.id);
+    }
+}
+
 // Initialize the Three.js scene
 window.initScene = function() {
     if (isInitialized) {
@@ -241,6 +261,10 @@ window.initScene = function() {
     controls.enablePan = false;
     controls.target.set(0, 0, 0);
 
+    // Raycaster for click detection
+    raycaster = new THREE.Raycaster();
+    mouse = new THREE.Vector2();
+
     // Create all components
     COMPONENTS.forEach(comp => {
         const mesh = createComponent(comp);
@@ -269,6 +293,10 @@ window.initScene = function() {
 
     // Handle resize
     window.addEventListener('resize', onResize);
+
+    // Mouse events for raycasting
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('click', onClick);
 
     // Start animation loop
     isInitialized = true;
