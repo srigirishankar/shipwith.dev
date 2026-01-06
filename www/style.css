@@ -75,6 +75,14 @@ body {
     to { transform: rotate(360deg); }
 }
 
+#app-container {
+    /* Desktop: no special layout, children use fixed positioning */
+}
+
+#scene-wrapper {
+    /* Desktop: scene uses fixed positioning, wrapper is passive */
+}
+
 #provider-selector {
     position: fixed;
     top: 1rem;
@@ -445,28 +453,51 @@ body {
 }
 
 @media (max-width: 768px) {
-    #metrics-bar {
-        gap: 1rem;
-        padding: 0.75rem 1rem;
+    /* Mobile: Stacked flexbox layout */
+    #app-container {
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+        min-height: 100dvh; /* Dynamic viewport for mobile browsers */
     }
 
-    .metric .value {
-        font-size: 1.125rem;
+    #cost-matrix {
+        position: static;
+        flex-shrink: 0;
+        padding: 0.5rem;
+        overflow-x: auto;
     }
 
-    #info-panel {
-        width: calc(100% - 40px);
-        right: 20px;
-        left: 20px;
+    #cost-matrix table {
+        font-size: 0.7rem;
+    }
+
+    #cost-matrix th,
+    #cost-matrix td {
+        padding: 0.3rem 0.5rem;
+    }
+
+    #scene-wrapper {
+        flex: 1;
+        position: relative;
+        min-height: 250px;
+    }
+
+    #scene {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
     }
 
     #coming-soon {
-        top: auto;
-        bottom: 80px;
-        left: 10px;
-        right: 10px;
-        width: auto;
+        position: static;
+        flex-shrink: 0;
+        border-radius: 0;
+        margin: 0;
         padding: 1rem;
+        width: auto;
     }
 
     #coming-soon h2 {
@@ -475,5 +506,37 @@ body {
 
     #coming-soon .details p {
         font-size: 0.8rem;
+    }
+
+    #controls {
+        position: fixed;
+        bottom: auto;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 100;
+    }
+
+    #controls button {
+        padding: 0.75rem 1.5rem;
+        font-size: 0.9rem;
+    }
+
+    #info-panel {
+        width: calc(100% - 40px);
+        right: 20px;
+        left: 20px;
+        top: auto;
+        bottom: 20px;
+        max-height: 50vh;
+    }
+
+    #provider-selector {
+        top: 0.5rem;
+        right: 0.5rem;
+    }
+
+    #provider-selector label {
+        display: none;
     }
 }

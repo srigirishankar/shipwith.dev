@@ -28,6 +28,66 @@
     <script src="/scene.js"></script>
 </head>
 <body>
+    <div id="app-container">
+        <div id="cost-matrix">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Configuration</th>
+                        <th>Cost</th>
+                        <th>Latency</th>
+                    </tr>
+                </thead>
+                <tbody id="cost-matrix-body">
+                    <tr class="current" data-provider="mixed">
+                        <td>Mixed (Current)</td>
+                        <td id="mixed-cost">$0</td>
+                        <td id="mixed-latency">12ms</td>
+                    </tr>
+                    <tr data-provider="cf">
+                        <td>Pure Cloudflare</td>
+                        <td>$0</td>
+                        <td>20ms</td>
+                    </tr>
+                    <tr data-provider="gcp">
+                        <td>Pure GCP</td>
+                        <td>$15/mo</td>
+                        <td>100ms</td>
+                    </tr>
+                    <tr data-provider="aws">
+                        <td>Pure AWS</td>
+                        <td>$45/mo</td>
+                        <td>50ms</td>
+                    </tr>
+                    <tr data-provider="azure">
+                        <td>Pure Azure</td>
+                        <td>$70/mo</td>
+                        <td>100ms</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div id="scene-wrapper">
+            <canvas id="scene"></canvas>
+        </div>
+
+        <div id="coming-soon">
+            <h2>Building in Public</h2>
+            <p class="tagline">An interactive architecture simulator for web apps</p>
+            <div class="status">
+                <span class="status-dot"></span>
+                <span>Work in Progress</span>
+            </div>
+            <div class="details">
+                <p><strong>Vision:</strong> Explore how your tech stack choices affect cost, latency, and uptime. Click to deconstruct the architecture and see how each piece connects.</p>
+                <p><strong>Built with:</strong> Rust/WASM, Three.js, Cloudflare Pages</p>
+                <p><strong>Next up:</strong> 3D component sprites, explode animation, connection threads</p>
+            </div>
+            <a href="https://github.com/srigirishankar/shipwith.dev" target="_blank" rel="noopener" class="github-link">View on GitHub</a>
+        </div>
+    </div>
+
     <div id="provider-selector">
         <label for="provider-select">Provider:</label>
         <select id="provider-select">
@@ -38,47 +98,6 @@
             <option value="azure">Azure</option>
         </select>
     </div>
-
-    <div id="cost-matrix">
-        <table>
-            <thead>
-                <tr>
-                    <th>Configuration</th>
-                    <th>Cost</th>
-                    <th>Latency</th>
-                </tr>
-            </thead>
-            <tbody id="cost-matrix-body">
-                <tr class="current" data-provider="mixed">
-                    <td>Mixed (Current)</td>
-                    <td id="mixed-cost">$0</td>
-                    <td id="mixed-latency">12ms</td>
-                </tr>
-                <tr data-provider="cf">
-                    <td>Pure Cloudflare</td>
-                    <td>$0</td>
-                    <td>20ms</td>
-                </tr>
-                <tr data-provider="gcp">
-                    <td>Pure GCP</td>
-                    <td>$15/mo</td>
-                    <td>100ms</td>
-                </tr>
-                <tr data-provider="aws">
-                    <td>Pure AWS</td>
-                    <td>$45/mo</td>
-                    <td>50ms</td>
-                </tr>
-                <tr data-provider="azure">
-                    <td>Pure Azure</td>
-                    <td>$70/mo</td>
-                    <td>100ms</td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-
-    <canvas id="scene"></canvas>
 
     <div id="loading-overlay">
         <div class="loading-content">
@@ -110,21 +129,6 @@
         <div id="panel-links">
             <a id="panel-docs-link" href="#" target="_blank" rel="noopener">Docs</a>
         </div>
-    </div>
-
-    <div id="coming-soon">
-        <h2>Building in Public</h2>
-        <p class="tagline">An interactive architecture simulator for web apps</p>
-        <div class="status">
-            <span class="status-dot"></span>
-            <span>Work in Progress</span>
-        </div>
-        <div class="details">
-            <p><strong>Vision:</strong> Explore how your tech stack choices affect cost, latency, and uptime. Click to deconstruct the architecture and see how each piece connects.</p>
-            <p><strong>Built with:</strong> Rust/WASM, Three.js, Cloudflare Pages</p>
-            <p><strong>Next up:</strong> 3D component sprites, explode animation, connection threads</p>
-        </div>
-        <a href="https://github.com/srigirishankar/shipwith.dev" target="_blank" rel="noopener" class="github-link">View on GitHub</a>
     </div>
 
     <div id="controls">
