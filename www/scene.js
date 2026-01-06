@@ -342,9 +342,9 @@ function createConnection(connDef) {
 
     // Create label sprite at curve midpoint
     const labelSprite = createLabelSprite(connDef.label, connDef.color);
-    const midPoint = curve.getPoint(0.5);
-    labelSprite.position.copy(midPoint);
-    labelSprite.position.y += 0.25; // Slight offset above the curve
+    const labelPoint = curve.getPoint(0.35); // Position closer to source, not midpoint
+    labelSprite.position.copy(labelPoint);
+    labelSprite.position.y += 0.5; // Offset above the curve
 
     line.userData = {
         from: connDef.from,
@@ -400,9 +400,9 @@ function updateConnectionCurve(connection) {
 
     // Update label sprite position to curve midpoint
     if (connection.userData.labelSprite) {
-        const midPoint = curve.getPoint(0.5);
-        connection.userData.labelSprite.position.copy(midPoint);
-        connection.userData.labelSprite.position.y += 0.25;
+        const labelPoint = curve.getPoint(0.35);
+        connection.userData.labelSprite.position.copy(labelPoint);
+        connection.userData.labelSprite.position.y += 0.5;
     }
 }
 
