@@ -10,10 +10,14 @@
     <meta property="og:description" content="See how your tech choices affect what matters.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://shipwith.dev">
+    <meta property="og:image" content="https://shipwith.dev/og-image.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
 
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="shipwith.dev">
     <meta name="twitter:description" content="Interactive architecture simulator for web apps.">
+    <meta name="twitter:image" content="https://shipwith.dev/og-image.png">
 
     <title>shipwith.dev - Architecture Simulator</title>
 
@@ -76,6 +80,13 @@
 
     <canvas id="scene"></canvas>
 
+    <div id="loading-overlay">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <p>Loading WASM...</p>
+        </div>
+    </div>
+
     <div id="info-panel" class="hidden">
         <button id="close-panel" aria-label="Close panel">&times;</button>
         <h2 id="panel-title"></h2>
@@ -128,6 +139,12 @@
             await init();
             const app = new App();
             app.start();
+
+            // Hide loading overlay
+            const loadingOverlay = document.getElementById('loading-overlay');
+            if (loadingOverlay) {
+                loadingOverlay.classList.add('hidden');
+            }
         }
 
         main().catch(console.error);

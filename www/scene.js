@@ -24,6 +24,12 @@ const SWAPPABLE_COMPONENTS = ['workers', 'pages', 'kv', 'd1'];
 // Raycasting for click detection
 let raycaster, mouse;
 
+// Touch tracking
+let touchStartTime = 0;
+let touchStartPos = { x: 0, y: 0 };
+const TAP_THRESHOLD_MS = 300;
+const TAP_MOVE_THRESHOLD = 10;
+
 // Provider-specific metrics (total for hobby app ~100k req/mo)
 // Latency = max component latency for that provider (consistent with calculateMixedMetrics)
 const PROVIDER_METRICS = {
@@ -418,6 +424,58 @@ function onClick(event) {
     }
 }
 
+// Touch event handlers for mobile
+function onTouchStart(event) {
+    if (event.touches.length === 1) {
+        touchStartTime = Date.now();
+        touchStartPos.x = event.touches[0].clientX;
+        touchStartPos.y = event.touches[0].clientY;
+        // Update mouse position for potential tap
+        mouse.x = (event.touches[0].clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(event.touches[0].clientY / window.innerHeight) * 2 + 1;
+    }
+}
+
+function onTouchMove(event) {
+    if (event.touches.length === 1) {
+        // Update mouse position during drag
+        mouse.x = (event.touches[0].clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(event.touches[0].clientY / window.innerHeight) * 2 + 1;
+    }
+}
+
+function onTouchEnd(event) {
+    const touchEndTime = Date.now();
+    const touchDuration = touchEndTime - touchStartTime;
+
+    // Get end position from changedTouches (touches is empty on touchend)
+    if (event.changedTouches.length === 1) {
+        const endX = event.changedTouches[0].clientX;
+        const endY = event.changedTouches[0].clientY;
+        const moveDistance = Math.sqrt(
+            Math.pow(endX - touchStartPos.x, 2) +
+            Math.pow(endY - touchStartPos.y, 2)
+        );
+
+        // Detect tap: short duration + minimal movement
+        if (touchDuration < TAP_THRESHOLD_MS && moveDistance < TAP_MOVE_THRESHOLD) {
+            // Update mouse to final touch position
+            mouse.x = (endX / window.innerWidth) * 2 - 1;
+            mouse.y = -(endY / window.innerHeight) * 2 + 1;
+
+            // Perform raycast like click
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(components);
+
+            if (intersects.length > 0) {
+                const tappedComponent = intersects[0].object;
+                console.log('Tapped component:', tappedComponent.userData.id);
+                showInfoPanel(tappedComponent.userData.id);
+            }
+        }
+    }
+}
+
 // Track current panel component for provider switching
 let currentPanelComponentId = null;
 
@@ -685,6 +743,11 @@ window.initScene = function() {
     // Mouse events for raycasting
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('click', onClick);
+
+    // Touch events for mobile
+    canvas.addEventListener('touchstart', onTouchStart, { passive: true });
+    canvas.addEventListener('touchmove', onTouchMove, { passive: true });
+    canvas.addEventListener('touchend', onTouchEnd, { passive: true });
 
     // Apply initial mixed mode textures
     updateAllComponentTextures();
