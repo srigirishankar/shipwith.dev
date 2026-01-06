@@ -452,6 +452,15 @@ body {
     color: white;
 }
 
+/* Desktop: Hide coming-soon when scene is exploded */
+@media (min-width: 769px) {
+    #coming-soon.scene-exploded {
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s ease;
+    }
+}
+
 @media (max-width: 768px) {
     /* Mobile: Stacked flexbox layout */
     #app-container {

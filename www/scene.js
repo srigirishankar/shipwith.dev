@@ -886,6 +886,9 @@ function explodeComponents() {
     if (isExploded) return;
     isExploded = true;
 
+    // Hide coming-soon panel on desktop during exploded view
+    document.getElementById('coming-soon')?.classList.add('scene-exploded');
+
     const duration = 1000;
     const startTime = Date.now();
 
@@ -925,6 +928,9 @@ function explodeComponents() {
 function reconstructComponents() {
     if (!isExploded) return;
     isExploded = false;
+
+    // Show coming-soon panel again
+    document.getElementById('coming-soon')?.classList.remove('scene-exploded');
 
     const duration = 800;
     const startTime = Date.now();
