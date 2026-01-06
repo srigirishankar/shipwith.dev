@@ -1,7 +1,7 @@
 // Three.js scene setup for shipwith.dev
 // Wrapped for easy calling from Rust/WASM
 
-let scene, camera, renderer, cube;
+let scene, camera, renderer, controls, cube;
 let isInitialized = false;
 
 // Initialize the Three.js scene
@@ -37,6 +37,15 @@ window.initScene = function() {
     });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+    // Orbit Controls - allows mouse rotation/zoom
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.minDistance = 3;
+    controls.maxDistance = 20;
+    controls.enablePan = false;
+    console.log('Orbit controls added');
 
     // Add a simple test object (orange cube) to verify rendering
     const geometry = new THREE.BoxGeometry(1.5, 1.5, 1.5);
@@ -75,6 +84,11 @@ function onResize() {
 
 function animate() {
     requestAnimationFrame(animate);
+
+    // Update orbit controls (for damping)
+    if (controls) {
+        controls.update();
+    }
 
     // Rotate the test cube
     if (cube) {
