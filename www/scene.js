@@ -340,18 +340,12 @@ function createConnection(connDef) {
 
     const line = new THREE.Line(geometry, material);
 
-    // Create label sprite near source with perpendicular offset
+    // Create label sprite overlaying destination panel
     const labelSprite = createLabelSprite(connDef.label, connDef.color);
-    const labelT = 0.25; // Position closer to source
-    const labelPoint = curve.getPoint(labelT);
-    const tangent = curve.getTangent(labelT);
-    // Perpendicular offset (rotate tangent 90 degrees in XY plane)
-    const perpOffset = 0.6;
-    labelSprite.position.set(
-        labelPoint.x - tangent.y * perpOffset,
-        labelPoint.y + tangent.x * perpOffset + 0.3,
-        labelPoint.z
-    );
+    // Position at destination with slight offset toward source
+    const destPoint = curve.getPoint(0.9);
+    labelSprite.position.copy(destPoint);
+    labelSprite.position.z += 0.1; // Slightly in front of panel
 
     line.userData = {
         from: connDef.from,
@@ -405,17 +399,11 @@ function updateConnectionCurve(connection) {
     connection.geometry.setFromPoints(points);
     connection.userData.curve = curve;
 
-    // Update label sprite position with perpendicular offset
+    // Update label sprite to overlay destination panel
     if (connection.userData.labelSprite) {
-        const labelT = 0.25;
-        const labelPoint = curve.getPoint(labelT);
-        const tangent = curve.getTangent(labelT);
-        const perpOffset = 0.6;
-        connection.userData.labelSprite.position.set(
-            labelPoint.x - tangent.y * perpOffset,
-            labelPoint.y + tangent.x * perpOffset + 0.3,
-            labelPoint.z
-        );
+        const destPoint = curve.getPoint(0.9);
+        connection.userData.labelSprite.position.copy(destPoint);
+        connection.userData.labelSprite.position.z += 0.1;
     }
 }
 
