@@ -229,8 +229,144 @@ function createLabelSprite(text, color) {
     return sprite;
 }
 
-// Create a canvas texture with label
-function createLabelTexture(name, color) {
+// Draw component-specific icon on canvas
+function drawComponentIcon(ctx, componentId, x, y, size) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    const s = size; // scale factor
+
+    switch(componentId) {
+        case 'user':
+            // Person icon: head + body
+            ctx.beginPath();
+            ctx.arc(x, y - s*0.3, s*0.25, 0, Math.PI * 2); // head
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(x, y + s*0.4, s*0.4, Math.PI, 0); // body
+            ctx.fill();
+            break;
+
+        case 'browser':
+            // Browser window icon
+            ctx.strokeRect(x - s*0.4, y - s*0.35, s*0.8, s*0.7);
+            ctx.beginPath();
+            ctx.moveTo(x - s*0.4, y - s*0.15);
+            ctx.lineTo(x + s*0.4, y - s*0.15);
+            ctx.stroke();
+            // Dots in toolbar
+            ctx.beginPath();
+            ctx.arc(x - s*0.25, y - s*0.25, s*0.06, 0, Math.PI * 2);
+            ctx.arc(x - s*0.1, y - s*0.25, s*0.06, 0, Math.PI * 2);
+            ctx.fill();
+            break;
+
+        case 'workers':
+            // Gear/cog icon
+            ctx.beginPath();
+            ctx.arc(x, y, s*0.2, 0, Math.PI * 2);
+            ctx.stroke();
+            for (let i = 0; i < 6; i++) {
+                const angle = (i / 6) * Math.PI * 2;
+                ctx.beginPath();
+                ctx.moveTo(x + Math.cos(angle) * s*0.25, y + Math.sin(angle) * s*0.25);
+                ctx.lineTo(x + Math.cos(angle) * s*0.4, y + Math.sin(angle) * s*0.4);
+                ctx.stroke();
+            }
+            break;
+
+        case 'pages':
+            // Document/page icon
+            ctx.beginPath();
+            ctx.moveTo(x - s*0.3, y - s*0.4);
+            ctx.lineTo(x + s*0.15, y - s*0.4);
+            ctx.lineTo(x + s*0.3, y - s*0.25);
+            ctx.lineTo(x + s*0.3, y + s*0.4);
+            ctx.lineTo(x - s*0.3, y + s*0.4);
+            ctx.closePath();
+            ctx.stroke();
+            // Fold corner
+            ctx.beginPath();
+            ctx.moveTo(x + s*0.15, y - s*0.4);
+            ctx.lineTo(x + s*0.15, y - s*0.25);
+            ctx.lineTo(x + s*0.3, y - s*0.25);
+            ctx.stroke();
+            break;
+
+        case 'wasm':
+            // Code brackets icon
+            ctx.beginPath();
+            ctx.moveTo(x - s*0.2, y - s*0.35);
+            ctx.lineTo(x - s*0.35, y);
+            ctx.lineTo(x - s*0.2, y + s*0.35);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(x + s*0.2, y - s*0.35);
+            ctx.lineTo(x + s*0.35, y);
+            ctx.lineTo(x + s*0.2, y + s*0.35);
+            ctx.stroke();
+            break;
+
+        case 'threejs':
+            // 3D cube icon
+            ctx.beginPath();
+            // Front face
+            ctx.moveTo(x - s*0.25, y);
+            ctx.lineTo(x, y + s*0.3);
+            ctx.lineTo(x + s*0.25, y);
+            ctx.lineTo(x, y - s*0.3);
+            ctx.closePath();
+            ctx.stroke();
+            // Top lines
+            ctx.beginPath();
+            ctx.moveTo(x, y - s*0.3);
+            ctx.lineTo(x, y);
+            ctx.moveTo(x - s*0.25, y);
+            ctx.lineTo(x, y);
+            ctx.moveTo(x + s*0.25, y);
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            break;
+
+        case 'kv':
+            // Key icon
+            ctx.beginPath();
+            ctx.arc(x - s*0.15, y - s*0.1, s*0.2, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(x, y - s*0.1);
+            ctx.lineTo(x + s*0.35, y - s*0.1);
+            ctx.lineTo(x + s*0.35, y + s*0.1);
+            ctx.moveTo(x + s*0.2, y - s*0.1);
+            ctx.lineTo(x + s*0.2, y + s*0.05);
+            ctx.stroke();
+            break;
+
+        case 'd1':
+            // Database cylinder icon
+            ctx.beginPath();
+            ctx.ellipse(x, y - s*0.25, s*0.3, s*0.12, 0, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(x - s*0.3, y - s*0.25);
+            ctx.lineTo(x - s*0.3, y + s*0.25);
+            ctx.moveTo(x + s*0.3, y - s*0.25);
+            ctx.lineTo(x + s*0.3, y + s*0.25);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.ellipse(x, y + s*0.25, s*0.3, s*0.12, 0, 0, Math.PI);
+            ctx.stroke();
+            break;
+    }
+    ctx.restore();
+}
+
+// Create a canvas texture with label and icon
+function createLabelTexture(name, color, componentId) {
     const canvas = document.createElement('canvas');
     canvas.width = 256;
     canvas.height = 256;
@@ -247,6 +383,11 @@ function createLabelTexture(name, color) {
     ctx.lineWidth = 4;
     ctx.stroke();
 
+    // Draw icon at top
+    if (componentId) {
+        drawComponentIcon(ctx, componentId, 128, 80, 50);
+    }
+
     // Info indicator (small "i" in bottom-right corner)
     ctx.fillStyle = 'rgba(255,255,255,0.8)';
     ctx.beginPath();
@@ -258,20 +399,20 @@ function createLabelTexture(name, color) {
     ctx.textBaseline = 'middle';
     ctx.fillText('i', 220, 221);
 
-    // Text
+    // Text (moved down to make room for icon)
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 28px Inter, sans-serif';
+    ctx.font = 'bold 24px Inter, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
     // Handle multi-word names
     const words = name.split(' ');
     if (words.length > 1 && name.length > 10) {
-        ctx.font = 'bold 24px Inter, sans-serif';
-        ctx.fillText(words[0], 128, 115);
-        ctx.fillText(words.slice(1).join(' '), 128, 145);
+        ctx.font = 'bold 20px Inter, sans-serif';
+        ctx.fillText(words[0], 128, 155);
+        ctx.fillText(words.slice(1).join(' '), 128, 180);
     } else {
-        ctx.fillText(name, 128, 128);
+        ctx.fillText(name, 128, 165);
     }
 
     const texture = new THREE.CanvasTexture(canvas);
@@ -281,7 +422,7 @@ function createLabelTexture(name, color) {
 
 // Create component mesh
 function createComponent(comp) {
-    const texture = createLabelTexture(comp.name, comp.color);
+    const texture = createLabelTexture(comp.name, comp.color, comp.id);
     const geometry = new THREE.PlaneGeometry(1.8, 1.8);
     const material = new THREE.MeshBasicMaterial({
         map: texture,
@@ -627,8 +768,8 @@ function updateSingleComponentTexture(componentId) {
     // Get display name (with prefix in mixed mode)
     const displayName = getComponentDisplayName(componentId);
 
-    // Regenerate texture
-    const newTexture = createLabelTexture(displayName, providerComp.color);
+    // Regenerate texture with icon
+    const newTexture = createLabelTexture(displayName, providerComp.color, componentId);
     mesh.material.map = newTexture;
     mesh.material.needsUpdate = true;
     mesh.userData.name = displayName;
