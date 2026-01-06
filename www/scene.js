@@ -920,8 +920,8 @@ function explodeComponents() {
     }
     step();
 
-    // Camera: front view to see flat diagram, positioned lower to avoid cost matrix
-    animateCamera({ x: 0, y: -0.5, z: 18 });
+    // Camera: front view to see flat diagram
+    animateCamera({ x: 0, y: 1, z: 16 });
 }
 
 // Reconstruct animation - bring components back together
