@@ -485,6 +485,10 @@ function showInfoPanel(componentId) {
     const panel = document.getElementById('info-panel');
     if (!panel) return;
 
+    // Hide cost matrix when info panel opens (same position)
+    const costMatrix = document.getElementById('cost-matrix');
+    if (costMatrix) costMatrix.style.opacity = '0';
+
     const comp = COMPONENTS.find(c => c.id === componentId);
     const info = COMPONENT_INFO[componentId];
     if (!comp || !info) return;
@@ -547,6 +551,9 @@ function hideInfoPanel() {
     if (panel) {
         panel.classList.add('hidden');
     }
+    // Show cost matrix again
+    const costMatrix = document.getElementById('cost-matrix');
+    if (costMatrix) costMatrix.style.opacity = '1';
 }
 
 // Calculate mixed mode totals

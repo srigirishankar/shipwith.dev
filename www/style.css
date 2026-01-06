@@ -133,6 +133,7 @@ body {
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 12px;
     z-index: 100;
+    transition: opacity 0.3s ease;
 }
 
 #cost-matrix table {
@@ -188,9 +189,10 @@ body {
 
 #info-panel {
     position: fixed;
-    top: 80px;
-    right: 20px;
-    width: 360px;
+    top: 50%;
+    right: 1.5rem;
+    transform: translateY(-50%);
+    width: 320px;
     max-height: calc(100vh - 100px);
     overflow-y: auto;
     background: var(--panel-bg);
@@ -203,7 +205,7 @@ body {
 }
 
 #info-panel.hidden {
-    transform: translateX(400px);
+    transform: translateY(-50%) translateX(400px);
     opacity: 0;
     pointer-events: none;
 }
