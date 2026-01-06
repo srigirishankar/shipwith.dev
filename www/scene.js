@@ -23,6 +23,7 @@ const SWAPPABLE_COMPONENTS = ['workers', 'pages', 'kv', 'd1'];
 
 // Raycasting for click detection
 let raycaster, mouse;
+let hoveredComponent = null;  // Track currently hovered component for glow effect
 
 // Touch tracking
 let touchStartTime = 0;
@@ -40,30 +41,38 @@ const PROVIDER_METRICS = {
 };
 
 // Provider-specific component names (only for swappable services)
+// Primary colors: CF=Orange, AWS=Yellow, GCP=Green, Azure=Blue
+const PROVIDER_COLORS = {
+    cf: '#F6821F',     // Cloudflare Orange
+    aws: '#FFCC00',    // AWS Yellow
+    gcp: '#34A853',    // Google Green
+    azure: '#0078D4'   // Azure Blue
+};
+
 const PROVIDER_COMPONENTS = {
     cf: {
-        workers: { name: 'CF Workers', color: '#F6821F' },
-        pages: { name: 'CF Pages', color: '#F6821F' },
-        kv: { name: 'CF KV', color: '#9C27B0' },
-        d1: { name: 'CF D1', color: '#9C27B0' }
+        workers: { name: 'CF Workers', color: PROVIDER_COLORS.cf },
+        pages: { name: 'CF Pages', color: PROVIDER_COLORS.cf },
+        kv: { name: 'CF KV', color: PROVIDER_COLORS.cf },
+        d1: { name: 'CF D1', color: PROVIDER_COLORS.cf }
     },
     gcp: {
-        workers: { name: 'Cloud Run', color: '#4285F4' },
-        pages: { name: 'Firebase', color: '#FFCA28' },
-        kv: { name: 'Firestore', color: '#FFCA28' },
-        d1: { name: 'Cloud SQL', color: '#4285F4' }
+        workers: { name: 'Cloud Run', color: PROVIDER_COLORS.gcp },
+        pages: { name: 'Firebase', color: PROVIDER_COLORS.gcp },
+        kv: { name: 'Firestore', color: PROVIDER_COLORS.gcp },
+        d1: { name: 'Cloud SQL', color: PROVIDER_COLORS.gcp }
     },
     aws: {
-        workers: { name: 'Lambda@Edge', color: '#FF9900' },
-        pages: { name: 'Amplify', color: '#FF9900' },
-        kv: { name: 'DynamoDB', color: '#527FFF' },
-        d1: { name: 'Aurora', color: '#527FFF' }
+        workers: { name: 'Lambda@Edge', color: PROVIDER_COLORS.aws },
+        pages: { name: 'Amplify', color: PROVIDER_COLORS.aws },
+        kv: { name: 'DynamoDB', color: PROVIDER_COLORS.aws },
+        d1: { name: 'Aurora', color: PROVIDER_COLORS.aws }
     },
     azure: {
-        workers: { name: 'Functions', color: '#0078D4' },
-        pages: { name: 'Static Apps', color: '#0078D4' },
-        kv: { name: 'Cosmos DB', color: '#0078D4' },
-        d1: { name: 'Azure SQL', color: '#0078D4' }
+        workers: { name: 'Functions', color: PROVIDER_COLORS.azure },
+        pages: { name: 'Static Apps', color: PROVIDER_COLORS.azure },
+        kv: { name: 'Cosmos DB', color: PROVIDER_COLORS.azure },
+        d1: { name: 'Azure SQL', color: PROVIDER_COLORS.azure }
     }
 };
 
@@ -83,31 +92,39 @@ const COMPONENT_LATENCY = {
     d1: { cf: 20, gcp: 100, aws: 50, azure: 100 }
 };
 
+// Non-vendor component colors (distinct from provider colors)
+const NON_VENDOR_COLORS = {
+    user: '#4CAF50',      // Green (human/organic)
+    browser: '#00BCD4',   // Cyan (web/tech)
+    wasm: '#DEA584',      // Rust orange (Rust language)
+    threejs: '#AAAAAA'    // Light gray (neutral/3D)
+};
+
 // Component definitions with colors and positions
 // pos = assembled (compact 3D), exploded = architecture diagram (flat 2D)
 const COMPONENTS = [
-    { id: 'user', name: 'User', color: '#4CAF50',
+    { id: 'user', name: 'User', color: NON_VENDOR_COLORS.user,
       pos: { x: 0, y: 0.5, z: 4 },
       exploded: { x: 0, y: 6, z: 0 } },
-    { id: 'browser', name: 'Browser', color: '#2196F3',
+    { id: 'browser', name: 'Browser', color: NON_VENDOR_COLORS.browser,
       pos: { x: 0, y: 0, z: 2 },
       exploded: { x: 0, y: 3.5, z: 0 } },
-    { id: 'workers', name: 'CF Workers', color: '#F6821F',
+    { id: 'workers', name: 'CF Workers', color: PROVIDER_COLORS.cf,
       pos: { x: -1.2, y: 0, z: 0 },
       exploded: { x: -3.5, y: 1, z: 0 } },
-    { id: 'pages', name: 'CF Pages', color: '#F6821F',
+    { id: 'pages', name: 'CF Pages', color: PROVIDER_COLORS.cf,
       pos: { x: 1.2, y: 0, z: 0 },
       exploded: { x: 3.5, y: 1, z: 0 } },
-    { id: 'wasm', name: 'Rust/WASM', color: '#F6821F',
+    { id: 'wasm', name: 'Rust/WASM', color: NON_VENDOR_COLORS.wasm,
       pos: { x: -1.2, y: 0, z: -2 },
       exploded: { x: 3.5, y: -1.5, z: 0 } },
-    { id: 'threejs', name: 'Three.js', color: '#333333',
+    { id: 'threejs', name: 'Three.js', color: NON_VENDOR_COLORS.threejs,
       pos: { x: 1.2, y: 0, z: -2 },
       exploded: { x: 3.5, y: -4, z: 0 } },
-    { id: 'kv', name: 'CF KV', color: '#9C27B0',
+    { id: 'kv', name: 'CF KV', color: PROVIDER_COLORS.cf,
       pos: { x: -1.2, y: 0, z: -4 },
       exploded: { x: -5, y: -1.5, z: 0 } },
-    { id: 'd1', name: 'CF D1', color: '#9C27B0',
+    { id: 'd1', name: 'CF D1', color: PROVIDER_COLORS.cf,
       pos: { x: 1.2, y: 0, z: -4 },
       exploded: { x: -2, y: -1.5, z: 0 } },
 ];
@@ -190,6 +207,82 @@ const COMPONENT_INFO = {
         }
     }
 };
+
+// ============================================
+// GLSL Shaders for Modern Glass Card Effects
+// ============================================
+
+const GLASS_VERTEX_SHADER = `
+varying vec2 vUv;
+
+void main() {
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+const GLASS_FRAGMENT_SHADER = `
+uniform sampler2D cardTexture;
+uniform float time;
+uniform vec3 glowColor;
+uniform float borderWidth;
+uniform float glowIntensity;
+uniform float hoverAmount;
+uniform float pulsePhase;
+
+varying vec2 vUv;
+
+void main() {
+    vec4 card = texture2D(cardTexture, vUv);
+
+    // Distance from center for edge calculations
+    vec2 centered = vUv - 0.5;
+
+    // Rounded rectangle SDF (signed distance function)
+    vec2 d = abs(centered) - vec2(0.42, 0.42) + 0.08;
+    float dist = length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - 0.08;
+
+    // Animated gradient angle (rotates around the border)
+    float angle = atan(centered.y, centered.x) + time * 0.8;
+
+    // Use provider color for border with brightness variation
+    // Creates a "traveling light" effect around the border
+    float gradientPos = fract(angle / 6.28318 + 0.5);
+    float wave = 0.7 + 0.3 * sin(gradientPos * 6.28318 * 2.0);  // 2 bright spots rotating
+    vec3 borderColor = glowColor * wave;
+
+    // Add white highlight at the bright spots for extra pop
+    vec3 highlight = vec3(1.0) * smoothstep(0.8, 1.0, wave) * 0.3;
+    borderColor += highlight;
+
+    // Pulse animation (breathing effect)
+    float pulse = 0.5 + 0.5 * sin(pulsePhase);
+
+    // Dynamic glow intensity (base + pulse + hover boost)
+    float dynamicGlow = glowIntensity * (1.0 + pulse * 0.3 + hoverAmount * 0.8);
+
+    // Border mask (sharp edge)
+    float border = smoothstep(0.025, 0.0, abs(dist) - borderWidth);
+
+    // Outer glow (soft falloff from edge)
+    float glow = smoothstep(0.15, 0.0, dist) * dynamicGlow;
+
+    // Inner glow (subtle inner rim)
+    float innerGlow = smoothstep(-0.02, -0.08, dist) * 0.3 * dynamicGlow;
+
+    // Composite: card + border + glow effects
+    vec3 finalColor = card.rgb;
+    finalColor += borderColor * border * 1.2;           // Bright border
+    finalColor += glowColor * glow * 0.4;               // Outer glow (solid color)
+    finalColor += glowColor * innerGlow;                // Inner glow
+
+    // Alpha: card alpha + border + glow contributions
+    float finalAlpha = card.a + border * 0.9 + glow * 0.3;
+    finalAlpha = clamp(finalAlpha, 0.0, 1.0);
+
+    gl_FragColor = vec4(finalColor, finalAlpha);
+}
+`;
 
 // Create a small text sprite for connection labels
 function createLabelSprite(text, color) {
@@ -365,76 +458,121 @@ function drawComponentIcon(ctx, componentId, x, y, size) {
     ctx.restore();
 }
 
-// Create a canvas texture with label and icon
+// Create a canvas texture with label and icon (Modern smoky glass effect)
 function createLabelTexture(name, color, componentId) {
     const canvas = document.createElement('canvas');
-    canvas.width = 256;
-    canvas.height = 256;
+    canvas.width = 512;  // Higher resolution for sharper detail
+    canvas.height = 512;
     const ctx = canvas.getContext('2d');
 
-    // Background with rounded corners
-    ctx.fillStyle = color;
+    // === SMOKY BLACK GLASS BACKGROUND ===
+
+    // Layer 1: Dark glass base (pure black, no color)
+    ctx.fillStyle = 'rgba(15, 15, 20, 0.75)';
     ctx.beginPath();
-    ctx.roundRect(10, 10, 236, 236, 20);
+    ctx.roundRect(20, 20, 472, 472, 40);
     ctx.fill();
 
-    // Border
-    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-    ctx.lineWidth = 4;
-    ctx.stroke();
+    // Layer 2: Subtle top highlight (glass refraction)
+    const highlightGradient = ctx.createLinearGradient(256, 20, 256, 180);
+    highlightGradient.addColorStop(0, 'rgba(255, 255, 255, 0.08)');
+    highlightGradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.03)');
+    highlightGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = highlightGradient;
+    ctx.beginPath();
+    ctx.roundRect(24, 24, 464, 160, [36, 36, 0, 0]);
+    ctx.fill();
 
-    // Draw icon at top
+    // Layer 3: Inner shadow at edges for depth
+    const innerShadow = ctx.createRadialGradient(256, 256, 150, 256, 256, 260);
+    innerShadow.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    innerShadow.addColorStop(1, 'rgba(0, 0, 0, 0.4)');
+    ctx.fillStyle = innerShadow;
+    ctx.beginPath();
+    ctx.roundRect(20, 20, 472, 472, 40);
+    ctx.fill();
+
+    // === ICON (white, clean) ===
     if (componentId) {
-        drawComponentIcon(ctx, componentId, 128, 80, 50);
+        drawComponentIcon(ctx, componentId, 256, 160, 100);
     }
 
-    // Info indicator (small "i" in bottom-right corner)
-    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    // === INFO INDICATOR (colored ring, not filled) ===
+    // Outer colored ring
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 4;
     ctx.beginPath();
-    ctx.arc(220, 220, 16, 0, Math.PI * 2);
+    ctx.arc(440, 440, 28, 0, Math.PI * 2);
+    ctx.stroke();
+    // Dark fill
+    ctx.fillStyle = 'rgba(20, 20, 25, 0.9)';
+    ctx.beginPath();
+    ctx.arc(440, 440, 26, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = color;
-    ctx.font = 'bold 18px Inter, sans-serif';
+    // White "i"
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 32px Inter, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('i', 220, 221);
+    ctx.fillText('i', 440, 442);
 
-    // Text (moved down to make room for icon)
+    // === TEXT LABEL (white) ===
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 24px Inter, sans-serif';
+    ctx.font = 'bold 48px Inter, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
     // Handle multi-word names
     const words = name.split(' ');
     if (words.length > 1 && name.length > 10) {
-        ctx.font = 'bold 20px Inter, sans-serif';
-        ctx.fillText(words[0], 128, 155);
-        ctx.fillText(words.slice(1).join(' '), 128, 180);
+        ctx.font = 'bold 40px Inter, sans-serif';
+        ctx.fillText(words[0], 256, 310);
+        ctx.fillText(words.slice(1).join(' '), 256, 360);
     } else {
-        ctx.fillText(name, 128, 165);
+        ctx.fillText(name, 256, 330);
     }
 
     const texture = new THREE.CanvasTexture(canvas);
     texture.needsUpdate = true;
-    return texture;
+    return { texture, canvas };
 }
 
-// Create component mesh
-function createComponent(comp) {
-    const texture = createLabelTexture(comp.name, comp.color, comp.id);
-    const geometry = new THREE.PlaneGeometry(1.8, 1.8);
-    const material = new THREE.MeshBasicMaterial({
-        map: texture,
+// Create ShaderMaterial with glass effects
+function createGlassCardMaterial(canvasTexture, color) {
+    return new THREE.ShaderMaterial({
+        uniforms: {
+            cardTexture: { value: canvasTexture },
+            time: { value: 0 },
+            glowColor: { value: new THREE.Color(color) },
+            borderWidth: { value: 0.012 },
+            glowIntensity: { value: 0.6 },
+            hoverAmount: { value: 0 },
+            pulsePhase: { value: 0 }
+        },
+        vertexShader: GLASS_VERTEX_SHADER,
+        fragmentShader: GLASS_FRAGMENT_SHADER,
         transparent: true,
-        side: THREE.DoubleSide
+        side: THREE.DoubleSide,
+        depthWrite: false  // Better blending for transparent glow
     });
+}
+
+// Create component mesh with glass shader
+function createComponent(comp) {
+    const { texture, canvas } = createLabelTexture(comp.name, comp.color, comp.id);
+    const geometry = new THREE.PlaneGeometry(1.8, 1.8);
+
+    // Use glass shader material for animated effects
+    const material = createGlassCardMaterial(texture, comp.color);
+
     const mesh = new THREE.Mesh(geometry, material);
 
     mesh.position.set(comp.pos.x, comp.pos.y, comp.pos.z);
     mesh.userData = {
         id: comp.id,
         name: comp.name,
+        color: comp.color,
+        canvas: canvas,  // Store for texture updates
         basePosition: { ...comp.pos },
         explodedPosition: { ...comp.exploded }
     };
@@ -754,10 +892,15 @@ function updateSingleComponentTexture(componentId) {
     const displayName = getComponentDisplayName(componentId);
 
     // Regenerate texture with icon
-    const newTexture = createLabelTexture(displayName, providerComp.color, componentId);
-    mesh.material.map = newTexture;
+    const { texture, canvas } = createLabelTexture(displayName, providerComp.color, componentId);
+
+    // Update ShaderMaterial uniform
+    mesh.material.uniforms.cardTexture.value = texture;
+    mesh.material.uniforms.glowColor.value = new THREE.Color(providerComp.color);
     mesh.material.needsUpdate = true;
     mesh.userData.name = displayName;
+    mesh.userData.color = providerComp.color;
+    mesh.userData.canvas = canvas;
 }
 
 // Update all swappable component textures
@@ -900,14 +1043,42 @@ function onResize() {
 function animate() {
     requestAnimationFrame(animate);
 
+    const time = Date.now() * 0.001;  // Time in seconds
+
     // Update orbit controls (for damping)
     if (controls) {
         controls.update();
     }
 
-    // Make components face the camera (billboard effect)
-    components.forEach(mesh => {
+    // Detect hovered component via raycasting
+    if (raycaster && mouse && camera) {
+        raycaster.setFromCamera(mouse, camera);
+        const intersects = raycaster.intersectObjects(components);
+        hoveredComponent = intersects.length > 0 ? intersects[0].object : null;
+    }
+
+    // Make components face the camera (billboard effect) + update shader uniforms
+    components.forEach((mesh, i) => {
         mesh.lookAt(camera.position);
+
+        // Update shader uniforms for glass effects
+        if (mesh.material.uniforms) {
+            // Time for rotating gradient border
+            mesh.material.uniforms.time.value = time;
+
+            // Pulse phase (offset per component for variety)
+            mesh.material.uniforms.pulsePhase.value = time * 2 + i * 0.7;
+
+            // Hover effect (smooth lerp toward target)
+            const isHovered = hoveredComponent === mesh;
+            const targetHover = isHovered ? 1.0 : 0.0;
+            const currentHover = mesh.material.uniforms.hoverAmount.value;
+            mesh.material.uniforms.hoverAmount.value += (targetHover - currentHover) * 0.12;
+        }
+
+        // Subtle breathing scale animation (2% variation)
+        const breath = 1.0 + Math.sin(time * 1.5 + i * 0.5) * 0.015;
+        mesh.scale.setScalar(1.8 * breath);
     });
 
     // Update connection curves to follow component positions
