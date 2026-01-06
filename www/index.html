@@ -24,23 +24,54 @@
     <script src="/scene.js"></script>
 </head>
 <body>
-    <div id="metrics-bar">
-        <div class="metric">
-            <span class="label">Monthly Cost</span>
-            <span class="value" id="metric-cost">$0</span>
-        </div>
-        <div class="metric">
-            <span class="label">Latency</span>
-            <span class="value" id="metric-latency">12ms</span>
-        </div>
-        <div class="metric">
-            <span class="label">Uptime</span>
-            <span class="value" id="metric-uptime">99.99%</span>
-        </div>
-        <div class="metric">
-            <span class="label">Edge Locations</span>
-            <span class="value" id="metric-locations">300+</span>
-        </div>
+    <div id="provider-selector">
+        <label for="provider-select">Provider:</label>
+        <select id="provider-select">
+            <option value="mixed" selected>Mixed (Best of All)</option>
+            <option value="cf">Cloudflare</option>
+            <option value="gcp">Google Cloud</option>
+            <option value="aws">AWS</option>
+            <option value="azure">Azure</option>
+        </select>
+    </div>
+
+    <div id="cost-matrix">
+        <table>
+            <thead>
+                <tr>
+                    <th>Configuration</th>
+                    <th>Cost</th>
+                    <th>Latency</th>
+                </tr>
+            </thead>
+            <tbody id="cost-matrix-body">
+                <tr class="current" data-provider="mixed">
+                    <td>Mixed (Current)</td>
+                    <td id="mixed-cost">$0</td>
+                    <td id="mixed-latency">12ms</td>
+                </tr>
+                <tr data-provider="cf">
+                    <td>Pure Cloudflare</td>
+                    <td>$0</td>
+                    <td>20ms</td>
+                </tr>
+                <tr data-provider="gcp">
+                    <td>Pure GCP</td>
+                    <td>$15/mo</td>
+                    <td>100ms</td>
+                </tr>
+                <tr data-provider="aws">
+                    <td>Pure AWS</td>
+                    <td>$45/mo</td>
+                    <td>50ms</td>
+                </tr>
+                <tr data-provider="azure">
+                    <td>Pure Azure</td>
+                    <td>$70/mo</td>
+                    <td>100ms</td>
+                </tr>
+            </tbody>
+        </table>
     </div>
 
     <canvas id="scene"></canvas>
@@ -48,6 +79,15 @@
     <div id="info-panel" class="hidden">
         <button id="close-panel" aria-label="Close panel">&times;</button>
         <h2 id="panel-title"></h2>
+        <div id="panel-provider-selector" class="hidden">
+            <label for="panel-provider-select">Switch Provider:</label>
+            <select id="panel-provider-select">
+                <option value="cf">Cloudflare</option>
+                <option value="gcp">Google Cloud</option>
+                <option value="aws">AWS</option>
+                <option value="azure">Azure</option>
+            </select>
+        </div>
         <p id="panel-description"></p>
         <div id="panel-reasons">
             <h3>Why This Choice</h3>

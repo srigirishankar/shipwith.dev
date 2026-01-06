@@ -7,9 +7,75 @@ let connections = [];
 let particles = [];
 let isInitialized = false;
 let isExploded = false;
+let currentProvider = 'mixed';
+let isMixedMode = true;
+
+// Per-component provider selection (only used in mixed mode)
+let componentProviders = {
+    workers: 'cf',
+    pages: 'cf',
+    kv: 'cf',
+    d1: 'cf'
+};
+
+// Swappable component IDs
+const SWAPPABLE_COMPONENTS = ['workers', 'pages', 'kv', 'd1'];
 
 // Raycasting for click detection
 let raycaster, mouse;
+
+// Provider-specific metrics (total for hobby app ~100k req/mo)
+// Latency = max component latency for that provider (consistent with calculateMixedMetrics)
+const PROVIDER_METRICS = {
+    cf: { cost: '$0', latency: '20ms', uptime: '99.99%', locations: '300+' },      // max(12,10,5,20)
+    gcp: { cost: '$15/mo', latency: '100ms', uptime: '99.95%', locations: '35' },  // max(50,15,20,100)
+    aws: { cost: '$45/mo', latency: '50ms', uptime: '99.99%', locations: '400+' }, // max(30,15,10,50)
+    azure: { cost: '$70/mo', latency: '100ms', uptime: '99.95%', locations: '60+' } // max(50,15,20,100)
+};
+
+// Provider-specific component names (only for swappable services)
+const PROVIDER_COMPONENTS = {
+    cf: {
+        workers: { name: 'CF Workers', color: '#F6821F' },
+        pages: { name: 'CF Pages', color: '#F6821F' },
+        kv: { name: 'CF KV', color: '#9C27B0' },
+        d1: { name: 'CF D1', color: '#9C27B0' }
+    },
+    gcp: {
+        workers: { name: 'Cloud Run', color: '#4285F4' },
+        pages: { name: 'Firebase', color: '#FFCA28' },
+        kv: { name: 'Firestore', color: '#FFCA28' },
+        d1: { name: 'Cloud SQL', color: '#4285F4' }
+    },
+    aws: {
+        workers: { name: 'Lambda@Edge', color: '#FF9900' },
+        pages: { name: 'Amplify', color: '#FF9900' },
+        kv: { name: 'DynamoDB', color: '#527FFF' },
+        d1: { name: 'Aurora', color: '#527FFF' }
+    },
+    azure: {
+        workers: { name: 'Functions', color: '#0078D4' },
+        pages: { name: 'Static Apps', color: '#0078D4' },
+        kv: { name: 'Cosmos DB', color: '#0078D4' },
+        d1: { name: 'Azure SQL', color: '#0078D4' }
+    }
+};
+
+// Per-component costs in $/month for hobby app (~100k requests)
+const COMPONENT_COSTS = {
+    workers: { cf: 0, gcp: 0, aws: 0, azure: 0 },
+    pages: { cf: 0, gcp: 0, aws: 0, azure: 0 },
+    kv: { cf: 0, gcp: 0, aws: 0, azure: 5 },
+    d1: { cf: 0, gcp: 15, aws: 45, azure: 65 }
+};
+
+// Per-component latency in ms (warm, p50)
+const COMPONENT_LATENCY = {
+    workers: { cf: 12, gcp: 50, aws: 30, azure: 50 },
+    pages: { cf: 10, gcp: 15, aws: 15, azure: 15 },
+    kv: { cf: 5, gcp: 20, aws: 10, azure: 20 },
+    d1: { cf: 20, gcp: 100, aws: 50, azure: 100 }
+};
 
 // Component definitions with colors and positions
 // pos = assembled (compact 3D), exploded = architecture diagram (flat 2D)
@@ -71,7 +137,8 @@ const COMPONENT_INFO = {
         docs: 'https://developers.cloudflare.com/workers/',
         alternatives: {
             gcp: { name: 'Cloud Run functions', url: 'https://cloud.google.com/functions/docs', description: 'Serverless compute for event-driven functions' },
-            aws: { name: 'Lambda@Edge', url: 'https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/lambda-at-the-edge.html', description: 'Code at CloudFront edge locations' }
+            aws: { name: 'Lambda@Edge', url: 'https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/lambda-at-the-edge.html', description: 'Code at CloudFront edge locations' },
+            azure: { name: 'Azure Functions', url: 'https://learn.microsoft.com/en-us/azure/azure-functions/', description: 'Event-driven serverless compute' }
         }
     },
     pages: {
@@ -80,7 +147,8 @@ const COMPONENT_INFO = {
         docs: 'https://developers.cloudflare.com/pages/',
         alternatives: {
             gcp: { name: 'Firebase Hosting', url: 'https://firebase.google.com/docs/hosting', description: 'Fast CDN hosting for web apps' },
-            aws: { name: 'Amplify Hosting', url: 'https://docs.aws.amazon.com/amplify/latest/userguide/welcome.html', description: 'Git-based CI/CD hosting' }
+            aws: { name: 'Amplify Hosting', url: 'https://docs.aws.amazon.com/amplify/latest/userguide/welcome.html', description: 'Git-based CI/CD hosting' },
+            azure: { name: 'Static Web Apps', url: 'https://learn.microsoft.com/en-us/azure/static-web-apps/', description: 'Static hosting with serverless APIs' }
         }
     },
     wasm: {
@@ -101,7 +169,8 @@ const COMPONENT_INFO = {
         docs: 'https://developers.cloudflare.com/kv/',
         alternatives: {
             gcp: { name: 'Firestore', url: 'https://firebase.google.com/docs/firestore', description: 'NoSQL serverless database' },
-            aws: { name: 'DynamoDB', url: 'https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Introduction.html', description: 'Managed NoSQL key-value store' }
+            aws: { name: 'DynamoDB', url: 'https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Introduction.html', description: 'Managed NoSQL key-value store' },
+            azure: { name: 'Cosmos DB', url: 'https://learn.microsoft.com/en-us/azure/cosmos-db/', description: 'Globally distributed multi-model database' }
         }
     },
     d1: {
@@ -110,10 +179,49 @@ const COMPONENT_INFO = {
         docs: 'https://developers.cloudflare.com/d1/',
         alternatives: {
             gcp: { name: 'Cloud SQL', url: 'https://cloud.google.com/sql/docs', description: 'Managed MySQL/PostgreSQL' },
-            aws: { name: 'Aurora Serverless', url: 'https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.html', description: 'On-demand autoscaling database' }
+            aws: { name: 'Aurora Serverless', url: 'https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.html', description: 'On-demand autoscaling database' },
+            azure: { name: 'Azure SQL', url: 'https://learn.microsoft.com/en-us/azure/azure-sql/', description: 'Managed SQL Server in the cloud' }
         }
     }
 };
+
+// Create a small text sprite for connection labels
+function createLabelSprite(text, color) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 128;
+    canvas.height = 48;
+    const ctx = canvas.getContext('2d');
+
+    // Semi-transparent background pill
+    ctx.fillStyle = 'rgba(29, 29, 29, 0.85)';
+    ctx.beginPath();
+    ctx.roundRect(4, 4, 120, 40, 12);
+    ctx.fill();
+
+    // Border
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Text
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 18px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, 64, 24);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true;
+
+    const material = new THREE.SpriteMaterial({
+        map: texture,
+        transparent: true
+    });
+    const sprite = new THREE.Sprite(material);
+    sprite.scale.set(0.8, 0.3, 1);
+
+    return sprite;
+}
 
 // Create a canvas texture with label
 function createLabelTexture(name, color) {
@@ -225,16 +333,24 @@ function createConnection(connDef) {
     });
 
     const line = new THREE.Line(geometry, material);
+
+    // Create label sprite at curve midpoint
+    const labelSprite = createLabelSprite(connDef.label, connDef.color);
+    const midPoint = curve.getPoint(0.5);
+    labelSprite.position.copy(midPoint);
+    labelSprite.position.y += 0.25; // Slight offset above the curve
+
     line.userData = {
         from: connDef.from,
         to: connDef.to,
         label: connDef.label,
         curve: curve,
         baseFromPos: { ...fromPos },
-        baseToPos: { ...toPos }
+        baseToPos: { ...toPos },
+        labelSprite: labelSprite
     };
 
-    return line;
+    return { line, labelSprite };
 }
 
 // Create flowing particle for a connection
@@ -275,6 +391,13 @@ function updateConnectionCurve(connection) {
 
     connection.geometry.setFromPoints(points);
     connection.userData.curve = curve;
+
+    // Update label sprite position to curve midpoint
+    if (connection.userData.labelSprite) {
+        const midPoint = curve.getPoint(0.5);
+        connection.userData.labelSprite.position.copy(midPoint);
+        connection.userData.labelSprite.position.y += 0.25;
+    }
 }
 
 // Track mouse position for raycasting
@@ -295,6 +418,9 @@ function onClick(event) {
     }
 }
 
+// Track current panel component for provider switching
+let currentPanelComponentId = null;
+
 // Show info panel for a component
 function showInfoPanel(componentId) {
     const panel = document.getElementById('info-panel');
@@ -304,9 +430,26 @@ function showInfoPanel(componentId) {
     const info = COMPONENT_INFO[componentId];
     if (!comp || !info) return;
 
+    currentPanelComponentId = componentId;
+
+    // Get display name based on mode
+    const displayName = getComponentDisplayName(componentId);
+
     // Populate panel
-    document.getElementById('panel-title').textContent = comp.name;
+    document.getElementById('panel-title').textContent = displayName;
     document.getElementById('panel-description').textContent = info.description;
+
+    // Show/hide provider selector (only in mixed mode for swappable components)
+    const providerSelector = document.getElementById('panel-provider-selector');
+    const providerSelect = document.getElementById('panel-provider-select');
+    if (providerSelector && providerSelect) {
+        if (isMixedMode && SWAPPABLE_COMPONENTS.includes(componentId)) {
+            providerSelector.classList.remove('hidden');
+            providerSelect.value = componentProviders[componentId];
+        } else {
+            providerSelector.classList.add('hidden');
+        }
+    }
 
     // Populate reasons list
     const reasonsList = document.getElementById('panel-reasons-list');
@@ -317,10 +460,17 @@ function showInfoPanel(componentId) {
         reasonsList.appendChild(li);
     });
 
-    // Setup docs link
+    // Setup docs link - use provider-specific URL if available
     const docsLink = document.getElementById('panel-docs-link');
-    if (info.docs) {
-        docsLink.href = info.docs;
+    let docsUrl = info.docs;
+
+    // Check for provider-specific alternative
+    if (currentProvider !== 'cf' && info.alternatives && info.alternatives[currentProvider]) {
+        docsUrl = info.alternatives[currentProvider].url;
+    }
+
+    if (docsUrl) {
+        docsLink.href = docsUrl;
         docsLink.target = '_blank';
         docsLink.rel = 'noopener noreferrer';
         docsLink.style.display = 'inline';
@@ -338,6 +488,121 @@ function hideInfoPanel() {
     if (panel) {
         panel.classList.add('hidden');
     }
+}
+
+// Calculate mixed mode totals
+function calculateMixedMetrics() {
+    let totalCost = 0;
+    let maxLatency = 0;
+
+    SWAPPABLE_COMPONENTS.forEach(id => {
+        const provider = componentProviders[id];
+        totalCost += COMPONENT_COSTS[id]?.[provider] || 0;
+        maxLatency = Math.max(maxLatency, COMPONENT_LATENCY[id]?.[provider] || 0);
+    });
+
+    return {
+        cost: totalCost === 0 ? '$0' : `$${totalCost}/mo`,
+        latency: `${maxLatency}ms`,
+        uptime: '99.97%', // Weighted average approximation
+        locations: 'Varies'
+    };
+}
+
+// Update cost matrix display
+function updateMetrics() {
+    // Update mixed row with current calculations
+    const mixedMetrics = calculateMixedMetrics();
+    const mixedCostEl = document.getElementById('mixed-cost');
+    const mixedLatencyEl = document.getElementById('mixed-latency');
+
+    if (mixedCostEl) mixedCostEl.textContent = mixedMetrics.cost;
+    if (mixedLatencyEl) mixedLatencyEl.textContent = mixedMetrics.latency;
+
+    // Update row highlighting based on current provider
+    const rows = document.querySelectorAll('#cost-matrix-body tr');
+    rows.forEach(row => {
+        const rowProvider = row.dataset.provider;
+        if (rowProvider === currentProvider) {
+            row.classList.add('current');
+        } else {
+            row.classList.remove('current');
+        }
+    });
+}
+
+// Handle provider change - update components and metrics
+function onProviderChange(provider) {
+    currentProvider = provider;
+
+    if (provider === 'mixed') {
+        isMixedMode = true;
+        // In mixed mode, use per-component providers
+        updateAllComponentTextures();
+    } else {
+        isMixedMode = false;
+        // Reset all component providers to the selected provider
+        SWAPPABLE_COMPONENTS.forEach(id => {
+            componentProviders[id] = provider;
+        });
+        // Update all components to use this provider
+        updateAllComponentTextures();
+    }
+
+    // Update metrics/matrix
+    updateMetrics();
+
+    // Close info panel (provider context changed)
+    hideInfoPanel();
+}
+
+// Update a single component's texture based on its provider
+function updateSingleComponentTexture(componentId) {
+    const mesh = components.find(m => m.userData.id === componentId);
+    if (!mesh) return;
+
+    const provider = componentProviders[componentId];
+    const providerComp = PROVIDER_COMPONENTS[provider]?.[componentId];
+    if (!providerComp) return;
+
+    // Get display name (with prefix in mixed mode)
+    const displayName = getComponentDisplayName(componentId);
+
+    // Regenerate texture
+    const newTexture = createLabelTexture(displayName, providerComp.color);
+    mesh.material.map = newTexture;
+    mesh.material.needsUpdate = true;
+    mesh.userData.name = displayName;
+}
+
+// Update all swappable component textures
+function updateAllComponentTextures() {
+    components.forEach(mesh => {
+        const id = mesh.userData.id;
+        if (SWAPPABLE_COMPONENTS.includes(id)) {
+            updateSingleComponentTexture(id);
+        }
+    });
+}
+
+// Get display name for component (with provider prefix in mixed mode)
+function getComponentDisplayName(componentId) {
+    if (!SWAPPABLE_COMPONENTS.includes(componentId)) {
+        // Non-swappable components keep original name
+        const comp = COMPONENTS.find(c => c.id === componentId);
+        return comp ? comp.name : componentId;
+    }
+
+    const provider = isMixedMode ? componentProviders[componentId] : currentProvider;
+    const providerComp = PROVIDER_COMPONENTS[provider]?.[componentId];
+    if (!providerComp) return componentId;
+
+    if (isMixedMode) {
+        // Show prefix in mixed mode: "CF-Workers", "AWS-Lambda"
+        const prefixes = { cf: 'CF', gcp: 'GCP', aws: 'AWS', azure: 'Azure' };
+        return `${prefixes[provider]}-${providerComp.name}`;
+    }
+    return providerComp.name;
 }
 
 // Initialize the Three.js scene
@@ -396,9 +661,11 @@ window.initScene = function() {
 
     // Create all connections
     CONNECTIONS.forEach(connDef => {
-        const line = createConnection(connDef);
-        if (line) {
+        const result = createConnection(connDef);
+        if (result) {
+            const { line, labelSprite } = result;
             scene.add(line);
+            scene.add(labelSprite);
             connections.push(line);
 
             // Add 2-3 particles per connection
@@ -418,6 +685,12 @@ window.initScene = function() {
     // Mouse events for raycasting
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('click', onClick);
+
+    // Apply initial mixed mode textures
+    updateAllComponentTextures();
+
+    // Initialize metrics display
+    updateMetrics();
 
     // Start animation loop
     isInitialized = true;
@@ -483,6 +756,42 @@ window.initButtons = function() {
     const btnDeconstruct = document.getElementById('btn-deconstruct');
     const btnReconstruct = document.getElementById('btn-reconstruct');
     const btnClosePanel = document.getElementById('close-panel');
+    const providerSelect = document.getElementById('provider-select');
+    const panelProviderSelect = document.getElementById('panel-provider-select');
+
+    if (providerSelect) {
+        providerSelect.addEventListener('change', (e) => {
+            onProviderChange(e.target.value);
+        });
+    }
+
+    // Panel provider selector - switch individual component provider
+    if (panelProviderSelect) {
+        panelProviderSelect.addEventListener('change', (e) => {
+            if (currentPanelComponentId && SWAPPABLE_COMPONENTS.includes(currentPanelComponentId)) {
+                // Update this component's provider
+                componentProviders[currentPanelComponentId] = e.target.value;
+                // Update the component's texture
+                updateSingleComponentTexture(currentPanelComponentId);
+                // Update metrics
+                updateMetrics();
+                // Update panel title to reflect new name
+                document.getElementById('panel-title').textContent = getComponentDisplayName(currentPanelComponentId);
+            }
+        });
+    }
+
+    // Cost matrix row click handlers
+    const matrixRows = document.querySelectorAll('#cost-matrix-body tr');
+    matrixRows.forEach(row => {
+        row.addEventListener('click', () => {
+            const provider = row.dataset.provider;
+            if (provider && providerSelect) {
+                providerSelect.value = provider;
+                onProviderChange(provider);
+            }
+        });
+    });
 
     if (btnDeconstruct) {
         btnDeconstruct.addEventListener('click', () => {

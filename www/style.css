@@ -32,36 +32,106 @@ body {
     z-index: 1;
 }
 
-#metrics-bar {
+#provider-selector {
     position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
+    top: 1rem;
+    right: 1.5rem;
+    z-index: 150;
     display: flex;
-    justify-content: center;
-    gap: 3rem;
-    padding: 1rem 2rem;
-    background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
-    z-index: 100;
-}
-
-.metric {
-    display: flex;
-    flex-direction: column;
     align-items: center;
+    gap: 0.5rem;
 }
 
-.metric .label {
+#provider-selector label {
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.1em;
     color: var(--text-secondary);
 }
 
-.metric .value {
-    font-size: 1.5rem;
-    font-weight: 600;
+#provider-select {
+    background: var(--panel-bg);
+    color: var(--text-primary);
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    font-family: inherit;
+    cursor: pointer;
+    backdrop-filter: blur(10px);
+}
+
+#provider-select:hover {
+    border-color: var(--cf-orange);
+}
+
+#provider-select:focus {
+    outline: none;
+    border-color: var(--cf-orange);
+    box-shadow: 0 0 0 2px rgba(246, 130, 31, 0.2);
+}
+
+#cost-matrix {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding: 0.75rem 1rem;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.9), rgba(0,0,0,0.7));
+    z-index: 100;
+    display: flex;
+    justify-content: center;
+}
+
+#cost-matrix table {
+    border-collapse: collapse;
+    font-size: 0.8rem;
+}
+
+#cost-matrix th,
+#cost-matrix td {
+    padding: 0.4rem 1rem;
+    text-align: center;
+}
+
+#cost-matrix th {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+#cost-matrix td {
+    color: var(--text-secondary);
+}
+
+#cost-matrix td:first-child {
+    text-align: left;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+#cost-matrix tr.current {
+    background: rgba(246, 130, 31, 0.15);
+}
+
+#cost-matrix tr.current td {
     color: var(--cf-orange);
+    font-weight: 600;
+}
+
+#cost-matrix tr.current td:first-child {
+    color: var(--cf-orange);
+}
+
+#cost-matrix tbody tr {
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+#cost-matrix tbody tr:hover {
+    background: rgba(255,255,255,0.05);
 }
 
 #info-panel {
@@ -105,8 +175,44 @@ body {
 #panel-title {
     font-size: 1.25rem;
     font-weight: 600;
-    margin-bottom: 0.75rem;
+    margin-bottom: 0.5rem;
     padding-right: 2rem;
+}
+
+#panel-provider-selector {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    padding: 0.5rem;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 6px;
+}
+
+#panel-provider-selector.hidden {
+    display: none;
+}
+
+#panel-provider-selector label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+#panel-provider-select {
+    flex: 1;
+    background: var(--cf-gray);
+    color: var(--text-primary);
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    padding: 0.35rem 0.5rem;
+    font-size: 0.8rem;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+#panel-provider-select:focus {
+    outline: none;
+    border-color: var(--cf-orange);
 }
 
 #panel-description {
