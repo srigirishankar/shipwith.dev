@@ -103,3 +103,55 @@ function animate() {
 window.getScene = function() { return scene; };
 window.getCamera = function() { return camera; };
 window.getRenderer = function() { return renderer; };
+
+// Button handlers
+window.initButtons = function() {
+    const btnDeconstruct = document.getElementById('btn-deconstruct');
+    const btnReconstruct = document.getElementById('btn-reconstruct');
+
+    if (btnDeconstruct) {
+        btnDeconstruct.addEventListener('click', () => {
+            console.log('Deconstruct clicked');
+            // Placeholder: zoom out to show "deconstructed" view
+            if (controls) {
+                // Animate camera back
+                const targetZ = 12;
+                animateCamera(targetZ);
+            }
+            btnDeconstruct.classList.add('hidden');
+            btnReconstruct.classList.remove('hidden');
+        });
+    }
+
+    if (btnReconstruct) {
+        btnReconstruct.addEventListener('click', () => {
+            console.log('Reconstruct clicked');
+            // Placeholder: zoom back in
+            if (controls) {
+                const targetZ = 5;
+                animateCamera(targetZ);
+            }
+            btnReconstruct.classList.add('hidden');
+            btnDeconstruct.classList.remove('hidden');
+        });
+    }
+};
+
+function animateCamera(targetZ) {
+    const startZ = camera.position.z;
+    const duration = 800;
+    const startTime = Date.now();
+
+    function step() {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        // Ease out cubic
+        const eased = 1 - Math.pow(1 - progress, 3);
+        camera.position.z = startZ + (targetZ - startZ) * eased;
+
+        if (progress < 1) {
+            requestAnimationFrame(step);
+        }
+    }
+    step();
+}

@@ -5,6 +5,9 @@ use wasm_bindgen::prelude::*;
 extern "C" {
     #[wasm_bindgen(js_name = initScene)]
     fn init_scene();
+
+    #[wasm_bindgen(js_name = initButtons)]
+    fn init_buttons();
 }
 
 #[wasm_bindgen]
@@ -34,6 +37,10 @@ impl App {
         // Initialize Three.js scene
         init_scene();
         log::info!("Three.js scene initialized");
+
+        // Initialize button handlers
+        init_buttons();
+        log::info!("Button handlers initialized");
 
         self.initialized = true;
         log::info!("Application started successfully");
