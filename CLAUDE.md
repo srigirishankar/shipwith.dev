@@ -72,6 +72,7 @@ The app uses a **split-screen comparison view** with two independent viewports:
 
 **Key Constants:**
 - `LEFT_OFFSET = -5`, `RIGHT_OFFSET = 5` - X-axis positions for each column
+- `HEADER_HEIGHT_PX = 80` - Space reserved at top for column labels + dropdown
 - `currentViewShift` - Dynamic shift to leave room for info panels
 
 **Layer System (Three.js):**
@@ -89,3 +90,9 @@ The app uses a **split-screen comparison view** with two independent viewports:
 - Two separate panels: `#info-panel-left` and `#info-panel-right`
 - Each side operates independently (clicking one doesn't close the other)
 - Uses class-based selectors (`.panel-title`, `.panel-description`, etc.)
+
+**UI Layout:**
+- Column labels at top (`#column-labels`) with provider dropdown in right label
+- Comparison table at bottom center (`#comparison-table`)
+- "How It Works" button at top center (`#controls`)
+- Viewport rendering excludes top 80px for header area
