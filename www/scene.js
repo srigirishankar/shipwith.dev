@@ -977,6 +977,7 @@ function createConnectionWithOffset(connDef, xOffset, componentList) {
         from: connDef.from,
         to: connDef.to,
         label: connDef.label,
+        color: connDef.color,
         curve: curve,
         baseFromPos: { ...fromPos },
         baseToPos: { ...toPos },
@@ -1039,21 +1040,45 @@ function createConnection(connDef) {
 }
 
 // Create flowing particle for a connection
-function createParticle(connection) {
+// Particles are color-coded by connection type and speed reflects latency
+function createParticle(connection, side = 'right') {
     const geometry = new THREE.SphereGeometry(0.08, 8, 8);
+
+    // Color-coded by connection type (educational: shows request type)
+    const connColor = connection.userData.color || '#ffffff';
     const material = new THREE.MeshBasicMaterial({
-        color: 0xffffff,
+        color: new THREE.Color(connColor),
         transparent: true,
         opacity: 0.9
     });
     const particle = new THREE.Mesh(geometry, material);
+
+    // Calculate speed based on destination latency (educational: shows performance)
+    // Lower latency = faster particles, higher latency = slower particles
+    const destId = connection.userData.to;
+    let latency = 10; // Default for non-vendor components
+
+    if (COMPONENT_LATENCY[destId]) {
+        // For vendor components, use provider-specific latency
+        const provider = side === 'left' ? 'cf' : (componentProviders[destId] || 'cf');
+        latency = COMPONENT_LATENCY[destId][provider] || 10;
+    }
+
+    // Speed formula: faster for low latency, slower for high latency
+    // Base speed 0.008, reduced by latency factor
+    const baseSpeed = 0.008;
+    const speed = baseSpeed / (1 + latency / 20);
 
     // Random starting position along curve
     const progress = Math.random();
     particle.userData = {
         connection: connection,
         progress: progress,
-        speed: 0.003 + Math.random() * 0.002 // Varying speeds
+        speed: speed,
+        baseSpeed: speed,
+        side: side,
+        isPulsing: false,
+        pulseScale: 1.0
     };
 
     // Set initial position along the curve
@@ -1064,6 +1089,35 @@ function createParticle(connection) {
     }
 
     return particle;
+}
+
+// Trigger pulse animation on particles connected to a component
+// Educational: shows data flow paths when interacting with architecture
+function pulseConnectionsFor(componentId, side = 'right') {
+    const particles = side === 'left' ? leftParticles : rightParticles;
+    const connections = side === 'left' ? leftConnections : rightConnections;
+
+    // Find connections involving this component
+    connections.forEach(conn => {
+        const isConnected = conn.userData.from === componentId || conn.userData.to === componentId;
+        if (!isConnected) return;
+
+        // Pulse all particles on this connection
+        particles.forEach(particle => {
+            if (particle.userData.connection === conn) {
+                particle.userData.isPulsing = true;
+                particle.userData.pulseStartTime = Date.now();
+                particle.userData.pulseDirection = conn.userData.from === componentId ? 'outbound' : 'inbound';
+            }
+        });
+
+        // Also briefly highlight the connection line
+        const originalOpacity = conn.material.opacity;
+        conn.material.opacity = 1.0;
+        setTimeout(() => {
+            conn.material.opacity = originalOpacity;
+        }, 500);
+    });
 }
 
 // Update connection curve based on current component positions
@@ -1119,6 +1173,9 @@ function onClick(event) {
         const clickedComponent = intersects[0].object;
         const componentId = clickedComponent.userData.id;
         console.log('Clicked component:', componentId, 'on', isRightSide ? 'RIGHT (Mixed)' : 'LEFT (CF)');
+
+        // Pulse connections to show data flow (educational)
+        pulseConnectionsFor(componentId, isRightSide ? 'right' : 'left');
 
         // Check if this is an affected component (has glow from alternative selection)
         if (clickedComponent.userData.isAffected) {
@@ -2261,10 +2318,10 @@ window.initScene = function() {
             scene.add(result.line);
             leftConnections.push(result.line);
 
-            // Add particles
+            // Add particles (left side = Cloudflare, always fast)
             const numParticles = 2 + Math.floor(Math.random() * 2);
             for (let i = 0; i < numParticles; i++) {
-                const particle = createParticle(result.line);
+                const particle = createParticle(result.line, 'left');
                 particle.layers.set(1);  // Left side = layer 1
                 scene.add(particle);
                 leftParticles.push(particle);
@@ -2293,10 +2350,10 @@ window.initScene = function() {
             scene.add(result.line);
             rightConnections.push(result.line);
 
-            // Add particles
+            // Add particles (right side = Mixed, speed varies by provider)
             const numParticles = 2 + Math.floor(Math.random() * 2);
             for (let i = 0; i < numParticles; i++) {
-                const particle = createParticle(result.line);
+                const particle = createParticle(result.line, 'right');
                 particle.layers.set(2);  // Right side = layer 2
                 scene.add(particle);
                 rightParticles.push(particle);
@@ -2471,6 +2528,27 @@ function animate() {
 
         const pos = curve.getPoint(particle.userData.progress);
         particle.position.copy(pos);
+
+        // Handle pulse animation (educational: shows data flow on click)
+        if (particle.userData.isPulsing) {
+            const elapsed = Date.now() - particle.userData.pulseStartTime;
+            const pulseDuration = 800; // ms
+
+            if (elapsed < pulseDuration) {
+                // Grow and glow effect
+                const pulseProgress = elapsed / pulseDuration;
+                const scale = 1 + Math.sin(pulseProgress * Math.PI) * 1.5;
+                particle.scale.setScalar(scale);
+
+                // Increase opacity during pulse
+                particle.material.opacity = 0.9 + Math.sin(pulseProgress * Math.PI) * 0.1;
+            } else {
+                // Reset after pulse
+                particle.userData.isPulsing = false;
+                particle.scale.setScalar(1);
+                particle.material.opacity = 0.9;
+            }
+        }
     });
 
     // =============================================
