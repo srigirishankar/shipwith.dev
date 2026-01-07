@@ -36,8 +36,17 @@
                 <span class="label-text">CLOUDFLARE NATIVE</span>
             </div>
             <div class="column-label right">
-                <span class="label-icon">⚡</span>
-                <span class="label-text">MIXED (CLICK TO CUSTOMIZE)</span>
+                <div class="label-row">
+                    <span class="label-icon">⚡</span>
+                    <span class="label-text">MIXED (CLICK TO CUSTOMIZE)</span>
+                </div>
+                <select id="provider-select">
+                    <option value="mixed" selected>Mixed (Best of All)</option>
+                    <option value="cf">Cloudflare</option>
+                    <option value="gcp">Google Cloud</option>
+                    <option value="aws">AWS</option>
+                    <option value="azure">Azure</option>
+                </select>
             </div>
         </div>
 
@@ -94,17 +103,6 @@
         </div>
     </div>
 
-    <!-- Provider selector hidden - now using split view comparison -->
-    <div id="provider-selector" class="hidden">
-        <label for="provider-select">Provider:</label>
-        <select id="provider-select">
-            <option value="mixed" selected>Mixed (Best of All)</option>
-            <option value="cf">Cloudflare</option>
-            <option value="gcp">Google Cloud</option>
-            <option value="aws">AWS</option>
-            <option value="azure">Azure</option>
-        </select>
-    </div>
 
     <div id="loading-overlay">
         <div class="loading-content">

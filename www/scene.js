@@ -34,6 +34,9 @@ let debugLines = [];
 const PANEL_WIDTH_PX = 280;
 const PANEL_PADDING_PX = 16; // 1rem
 
+// Header height (column labels + dropdown) - viewport starts below this
+const HEADER_HEIGHT_PX = 80;
+
 // Dynamic view shift - calculated based on viewport
 let currentViewShift = 1.5;
 
@@ -1962,6 +1965,19 @@ function onProviderChange(provider) {
     // Update metrics/matrix
     updateMetrics();
 
+    // Update comparison table column header to show selected provider
+    const mixedColumnHeader = document.querySelector('#comparison-table th.mixed-column');
+    if (mixedColumnHeader) {
+        const providerNames = {
+            'mixed': 'Mixed',
+            'cf': 'Cloudflare',
+            'aws': 'AWS',
+            'gcp': 'GCP',
+            'azure': 'Azure'
+        };
+        mixedColumnHeader.textContent = providerNames[provider] || provider;
+    }
+
     // Close info panel (provider context changed)
     hideInfoPanel();
 }
@@ -2122,15 +2138,16 @@ window.initScene = function() {
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x1d1d1d);
 
-    // Calculate responsive camera params based on viewport
+    // Calculate responsive camera params based on viewport (adjusted for header)
+    const adjustedHeight = window.innerHeight - HEADER_HEIGHT_PX;
     const { cameraZ, viewShift, halfFrustumWidth } = calculateCameraParams(
         window.innerWidth,
-        window.innerHeight
+        adjustedHeight
     );
     currentViewShift = viewShift;
 
-    // Two cameras for split viewport - half aspect ratio each
-    const halfAspect = (window.innerWidth / 2) / window.innerHeight;
+    // Two cameras for split viewport - half aspect ratio each (adjusted for header)
+    const halfAspect = (window.innerWidth / 2) / adjustedHeight;
 
     // Left camera (Cloudflare side) - shifted to make room for panel on right of left column
     leftCamera = new THREE.PerspectiveCamera(60, halfAspect, 0.1, 1000);
@@ -2265,12 +2282,13 @@ window.initScene = function() {
 function onResize() {
     const width = window.innerWidth;
     const height = window.innerHeight;
+    const adjustedHeight = height - HEADER_HEIGHT_PX;
 
-    // Recalculate responsive camera params
-    const { cameraZ, viewShift, halfFrustumWidth } = calculateCameraParams(width, height);
+    // Recalculate responsive camera params (use adjusted height for proper aspect)
+    const { cameraZ, viewShift, halfFrustumWidth } = calculateCameraParams(width, adjustedHeight);
     currentViewShift = viewShift;
 
-    const halfAspect = (width / 2) / height;
+    const halfAspect = (width / 2) / adjustedHeight;
 
     // Update both cameras for split view
     if (leftCamera) {
@@ -2379,14 +2397,17 @@ function animate() {
     // SPLIT VIEWPORT RENDERING
     // =============================================
 
+    // Adjust height to leave space for header (column labels + dropdown)
+    const adjustedHeight = height - HEADER_HEIGHT_PX;
+
     // Left viewport (Cloudflare Native)
-    renderer.setViewport(0, 0, halfWidth, height);
-    renderer.setScissor(0, 0, halfWidth, height);
+    renderer.setViewport(0, 0, halfWidth, adjustedHeight);
+    renderer.setScissor(0, 0, halfWidth, adjustedHeight);
     renderer.render(scene, leftCamera);
 
     // Right viewport (Mixed/Customizable)
-    renderer.setViewport(halfWidth, 0, halfWidth, height);
-    renderer.setScissor(halfWidth, 0, halfWidth, height);
+    renderer.setViewport(halfWidth, 0, halfWidth, adjustedHeight);
+    renderer.setScissor(halfWidth, 0, halfWidth, adjustedHeight);
     renderer.render(scene, rightCamera);
 }
 

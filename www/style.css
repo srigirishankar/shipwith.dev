@@ -83,44 +83,6 @@ body {
     /* Desktop: scene uses fixed positioning, wrapper is passive */
 }
 
-#provider-selector {
-    position: fixed;
-    top: 1rem;
-    right: 1.5rem;
-    z-index: 150;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-#provider-selector label {
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--text-secondary);
-}
-
-#provider-select {
-    background: var(--panel-bg);
-    color: var(--text-primary);
-    border: 1px solid var(--border-subtle);
-    border-radius: 6px;
-    padding: 0.5rem 0.75rem;
-    font-size: 0.875rem;
-    font-family: inherit;
-    cursor: pointer;
-    backdrop-filter: blur(10px);
-}
-
-#provider-select:hover {
-    border-color: var(--cf-orange);
-}
-
-#provider-select:focus {
-    outline: none;
-    border-color: var(--cf-orange);
-    box-shadow: 0 0 0 2px rgba(246, 130, 31, 0.2);
-}
 
 #cost-matrix {
     position: fixed;
@@ -219,9 +181,40 @@ body {
 }
 
 .column-label.right {
-    justify-content: flex-end;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.5rem;
     background: linear-gradient(to bottom, rgba(16, 185, 129, 0.15), transparent);
     color: #10B981;
+}
+
+.column-label.right .label-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.column-label.right #provider-select {
+    pointer-events: auto;
+    background: rgba(29, 29, 29, 0.9);
+    color: var(--text-primary);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    padding: 0.4rem 0.6rem;
+    font-size: 0.75rem;
+    font-family: inherit;
+    cursor: pointer;
+    backdrop-filter: blur(10px);
+}
+
+.column-label.right #provider-select:hover {
+    border-color: #10B981;
+}
+
+.column-label.right #provider-select:focus {
+    outline: none;
+    border-color: #10B981;
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
 }
 
 .label-icon {
@@ -608,7 +601,7 @@ body {
 
 #controls {
     position: fixed;
-    bottom: 2rem;
+    top: 4rem;
     left: 50%;
     transform: translateX(-50%);
     display: flex;
@@ -791,10 +784,9 @@ body {
 
     #controls {
         position: fixed;
-        bottom: auto;
-        top: 50%;
+        top: 4rem;
         left: 50%;
-        transform: translate(-50%, -50%);
+        transform: translateX(-50%);
         z-index: 100;
     }
 
@@ -812,12 +804,4 @@ body {
         max-height: 50vh;
     }
 
-    #provider-selector {
-        top: 0.5rem;
-        right: 0.5rem;
-    }
-
-    #provider-selector label {
-        display: none;
-    }
 }
