@@ -2016,6 +2016,65 @@ function updateAllComponentTextures() {
     });
 }
 
+// Load a stack configuration from Real Stacks feature
+function loadStackFromStory(stack) {
+    // Map stack categories to component IDs
+    const categoryMap = {
+        compute: 'workers',
+        database: 'd1',
+        cache: 'kv',
+        hosting: 'pages',
+        queue: 'workers'  // queues map to workers category
+    };
+
+    // Map provider names to scene provider codes
+    const providerMap = {
+        cloudflare: 'cf',
+        vercel: 'gcp',
+        aws: 'aws',
+        gcp: 'gcp',
+        azure: 'azure',
+        turso: 'cf',
+        upstash: 'aws',
+        neon: 'gcp',
+        planetscale: 'gcp',
+        supabase: 'gcp'
+    };
+
+    Object.entries(stack).forEach(([category, config]) => {
+        const componentId = categoryMap[category];
+        if (componentId && config?.provider) {
+            const provider = providerMap[config.provider.toLowerCase()] || 'cf';
+            componentProviders[componentId] = provider;
+        }
+    });
+
+    updateAllComponentTextures();
+    updateMetrics();
+
+    // Update table header based on loaded configuration
+    const providers = Object.values(componentProviders);
+    const allSame = providers.every(p => p === providers[0]);
+    const providerNames = { cf: 'Cloudflare', aws: 'AWS', gcp: 'GCP', azure: 'Azure' };
+    const headerText = allSame ? providerNames[providers[0]] : 'Mixed';
+
+    const mixedColumnHeader = document.querySelector('#comparison-table th.mixed-column');
+    if (mixedColumnHeader) {
+        mixedColumnHeader.textContent = headerText;
+    }
+
+    // Sync dropdown with loaded configuration
+    const providerSelect = document.getElementById('provider-select');
+    if (providerSelect) {
+        providerSelect.value = allSame ? providers[0] : 'mixed';
+    }
+
+    // Update mode flag
+    isMixedMode = !allSame || providers[0] === 'mixed';
+
+    console.log('[Scene] Loaded stack:', stack);
+}
+
 // Get display name for component (with provider prefix in mixed mode)
 function getComponentDisplayName(componentId) {
     if (!SWAPPABLE_COMPONENTS.includes(componentId)) {
@@ -2275,6 +2334,27 @@ window.initScene = function() {
     // Start animation loop
     isInitialized = true;
     animate();
+
+    // Listen for stack loading from Real Stacks feature
+    // Event bus loads async, so retry until available
+    function registerEventBusListeners() {
+        if (window.shipwithEventBus) {
+            window.shipwithEventBus.on('stories:load-stack', (data) => {
+                loadStackFromStory(data.stack);
+            });
+            console.log('[Scene] Event bus listener registered');
+            return true;
+        }
+        return false;
+    }
+
+    if (!registerEventBusListeners()) {
+        const checkInterval = setInterval(() => {
+            if (registerEventBusListeners()) {
+                clearInterval(checkInterval);
+            }
+        }, 100);
+    }
 
     console.log('Three.js scene initialized successfully');
 };

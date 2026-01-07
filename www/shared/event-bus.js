@@ -82,3 +82,7 @@ export const EVENTS = {
   NEUTRAL_LEFT_CHANGED: 'neutral:left-stack-changed',
   NEUTRAL_BENCHMARK_LOADED: 'neutral:benchmark-loaded',
 };
+
+// Expose for non-module scripts (scene.js)
+window.shipwithEventBus = eventBus;
+window.shipwithEvents = EVENTS;
