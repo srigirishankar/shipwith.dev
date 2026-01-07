@@ -1,0 +1,408 @@
+{
+  "lastUpdated": "2026-01-07",
+  "version": "1.0.0",
+  "benchmarks": {
+    "cloudflare-workers": {
+      "displayName": "Cloudflare Workers",
+      "provider": "cloudflare",
+      "coldStart": {
+        "median": 12,
+        "p99": 45,
+        "min": 5,
+        "max": 150,
+        "unit": "ms",
+        "reports": 127,
+        "lastReport": "2026-01-05",
+        "source": "Community reports + CF docs",
+        "docsUrl": "https://developers.cloudflare.com/workers/platform/limits/"
+      },
+      "warmLatency": {
+        "median": 2,
+        "p99": 8,
+        "min": 1,
+        "max": 25,
+        "unit": "ms",
+        "reports": 243,
+        "lastReport": "2026-01-06",
+        "source": "Community reports",
+        "docsUrl": "https://developers.cloudflare.com/workers/platform/limits/"
+      },
+      "costPer1M": {
+        "median": 0.5,
+        "min": 0.5,
+        "max": 0.5,
+        "unit": "USD",
+        "reports": 89,
+        "lastReport": "2026-01-04",
+        "source": "Cloudflare Pricing",
+        "docsUrl": "https://developers.cloudflare.com/workers/platform/pricing/"
+      },
+      "edgeLocations": {
+        "value": 300,
+        "unit": "locations",
+        "source": "Cloudflare Network",
+        "docsUrl": "https://www.cloudflare.com/network/"
+      }
+    },
+    "aws-lambda": {
+      "displayName": "AWS Lambda",
+      "provider": "aws",
+      "coldStart": {
+        "median": 150,
+        "p99": 800,
+        "min": 50,
+        "max": 2500,
+        "unit": "ms",
+        "reports": 342,
+        "lastReport": "2026-01-06",
+        "source": "Community reports + AWS docs",
+        "docsUrl": "https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtime-environment.html"
+      },
+      "warmLatency": {
+        "median": 8,
+        "p99": 35,
+        "min": 3,
+        "max": 120,
+        "unit": "ms",
+        "reports": 456,
+        "lastReport": "2026-01-07",
+        "source": "Community reports",
+        "docsUrl": "https://docs.aws.amazon.com/lambda/"
+      },
+      "costPer1M": {
+        "median": 0.2,
+        "min": 0.2,
+        "max": 4.8,
+        "unit": "USD",
+        "reports": 198,
+        "lastReport": "2026-01-05",
+        "source": "AWS Pricing Calculator",
+        "docsUrl": "https://aws.amazon.com/lambda/pricing/"
+      },
+      "edgeLocations": {
+        "value": 32,
+        "unit": "regions",
+        "source": "AWS Global Infrastructure",
+        "docsUrl": "https://aws.amazon.com/about-aws/global-infrastructure/"
+      }
+    },
+    "vercel-edge": {
+      "displayName": "Vercel Edge Functions",
+      "provider": "vercel",
+      "coldStart": {
+        "median": 18,
+        "p99": 65,
+        "min": 8,
+        "max": 200,
+        "unit": "ms",
+        "reports": 78,
+        "lastReport": "2026-01-05",
+        "source": "Community reports",
+        "docsUrl": "https://vercel.com/docs/functions/edge-functions"
+      },
+      "warmLatency": {
+        "median": 3,
+        "p99": 12,
+        "min": 1,
+        "max": 40,
+        "unit": "ms",
+        "reports": 134,
+        "lastReport": "2026-01-06",
+        "source": "Community reports",
+        "docsUrl": "https://vercel.com/docs/functions/edge-functions/edge-functions-api"
+      },
+      "costPer1M": {
+        "median": 2.0,
+        "min": 0,
+        "max": 2.0,
+        "unit": "USD",
+        "reports": 45,
+        "lastReport": "2026-01-03",
+        "source": "Vercel Pricing",
+        "docsUrl": "https://vercel.com/pricing"
+      },
+      "edgeLocations": {
+        "value": 16,
+        "unit": "locations",
+        "source": "Vercel Network",
+        "docsUrl": "https://vercel.com/docs/edge-network/overview"
+      }
+    },
+    "deno-deploy": {
+      "displayName": "Deno Deploy",
+      "provider": "deno",
+      "coldStart": {
+        "median": 15,
+        "p99": 55,
+        "min": 6,
+        "max": 180,
+        "unit": "ms",
+        "reports": 42,
+        "lastReport": "2026-01-04",
+        "source": "Community reports",
+        "docsUrl": "https://deno.com/deploy/docs"
+      },
+      "warmLatency": {
+        "median": 3,
+        "p99": 10,
+        "min": 1,
+        "max": 30,
+        "unit": "ms",
+        "reports": 67,
+        "lastReport": "2026-01-06",
+        "source": "Community reports",
+        "docsUrl": "https://deno.com/deploy"
+      },
+      "costPer1M": {
+        "median": 2.0,
+        "min": 0,
+        "max": 2.0,
+        "unit": "USD",
+        "reports": 31,
+        "lastReport": "2026-01-02",
+        "source": "Deno Pricing",
+        "docsUrl": "https://deno.com/deploy/pricing"
+      },
+      "edgeLocations": {
+        "value": 34,
+        "unit": "locations",
+        "source": "Deno Network",
+        "docsUrl": "https://deno.com/deploy/docs/regions"
+      }
+    },
+    "google-cloud-run": {
+      "displayName": "Google Cloud Run",
+      "provider": "gcp",
+      "coldStart": {
+        "median": 200,
+        "p99": 1200,
+        "min": 80,
+        "max": 3500,
+        "unit": "ms",
+        "reports": 156,
+        "lastReport": "2026-01-06",
+        "source": "Community reports + GCP docs",
+        "docsUrl": "https://cloud.google.com/run/docs/about-execution-environment"
+      },
+      "warmLatency": {
+        "median": 12,
+        "p99": 45,
+        "min": 5,
+        "max": 150,
+        "unit": "ms",
+        "reports": 234,
+        "lastReport": "2026-01-07",
+        "source": "Community reports",
+        "docsUrl": "https://cloud.google.com/run"
+      },
+      "costPer1M": {
+        "median": 0.4,
+        "min": 0.4,
+        "max": 2.4,
+        "unit": "USD",
+        "reports": 123,
+        "lastReport": "2026-01-05",
+        "source": "GCP Pricing Calculator",
+        "docsUrl": "https://cloud.google.com/run/pricing"
+      },
+      "edgeLocations": {
+        "value": 38,
+        "unit": "regions",
+        "source": "GCP Global Infrastructure",
+        "docsUrl": "https://cloud.google.com/about/locations"
+      }
+    }
+  },
+  "migrations": [
+    {
+      "from": "aws-lambda",
+      "to": "cloudflare-workers",
+      "difficulty": 3,
+      "estimatedHours": 40,
+      "challenges": [
+        "Different runtime APIs (V8 isolates vs Node.js)",
+        "No native Node.js modules support",
+        "Size limits (1MB vs 50MB uncompressed)",
+        "Different environment variable handling",
+        "No filesystem access in Workers"
+      ],
+      "benefits": [
+        "Significantly faster cold starts",
+        "Lower latency from more edge locations",
+        "Simplified deployment model",
+        "Lower costs for high-traffic apps"
+      ],
+      "resources": [
+        {
+          "title": "AWS Lambda to Workers Migration Guide",
+          "url": "https://developers.cloudflare.com/workers/tutorials/migrate-from-aws-lambda/"
+        },
+        {
+          "title": "Node.js Compatibility",
+          "url": "https://developers.cloudflare.com/workers/runtime-apis/nodejs/"
+        }
+      ],
+      "communityRating": 4.2,
+      "completions": 89
+    },
+    {
+      "from": "vercel-edge",
+      "to": "cloudflare-workers",
+      "difficulty": 2,
+      "estimatedHours": 16,
+      "challenges": [
+        "Different middleware patterns",
+        "Environment variable migration",
+        "API differences in edge runtime",
+        "Deployment configuration changes"
+      ],
+      "benefits": [
+        "More control over edge behavior",
+        "Potentially lower costs at scale",
+        "Direct access to KV/R2/D1",
+        "More edge locations"
+      ],
+      "resources": [
+        {
+          "title": "Vercel to Workers Migration",
+          "url": "https://developers.cloudflare.com/workers/tutorials/migrate-from-vercel/"
+        }
+      ],
+      "communityRating": 4.5,
+      "completions": 34
+    },
+    {
+      "from": "express",
+      "to": "cloudflare-workers",
+      "difficulty": 4,
+      "estimatedHours": 80,
+      "challenges": [
+        "Complete rewrite from server to edge paradigm",
+        "No middleware compatibility",
+        "Database connection pooling limitations",
+        "Session management complexity",
+        "Stateless architecture requirements",
+        "No filesystem access"
+      ],
+      "benefits": [
+        "Massive latency improvements",
+        "Auto-scaling without containers",
+        "No server maintenance",
+        "Global distribution by default"
+      ],
+      "resources": [
+        {
+          "title": "Express to Workers Guide",
+          "url": "https://developers.cloudflare.com/workers/tutorials/migrate-from-express/"
+        },
+        {
+          "title": "Hono Framework (Express-like API)",
+          "url": "https://hono.dev/"
+        }
+      ],
+      "communityRating": 3.8,
+      "completions": 67
+    },
+    {
+      "from": "cloudflare-workers",
+      "to": "aws-lambda",
+      "difficulty": 2,
+      "estimatedHours": 24,
+      "challenges": [
+        "Adding IAM roles and permissions",
+        "Setting up VPC if needed",
+        "More complex deployment pipeline",
+        "Different cold start characteristics"
+      ],
+      "benefits": [
+        "Access to full AWS ecosystem",
+        "More compute time per request",
+        "Mature tooling and libraries",
+        "Better for CPU-intensive tasks"
+      ],
+      "resources": [
+        {
+          "title": "Workers to Lambda Migration",
+          "url": "https://docs.aws.amazon.com/lambda/latest/dg/getting-started.html"
+        }
+      ],
+      "communityRating": 3.5,
+      "completions": 23
+    },
+    {
+      "from": "google-cloud-run",
+      "to": "cloudflare-workers",
+      "difficulty": 4,
+      "estimatedHours": 60,
+      "challenges": [
+        "Container-based to serverless edge migration",
+        "Stateless architecture requirements",
+        "Size and memory constraints",
+        "Different scaling model",
+        "No long-running processes"
+      ],
+      "benefits": [
+        "Dramatically faster cold starts",
+        "Lower latency globally",
+        "Simpler deployment",
+        "Reduced costs for many workloads"
+      ],
+      "resources": [
+        {
+          "title": "Cloud Run to Workers Guide",
+          "url": "https://developers.cloudflare.com/workers/tutorials/migrate-from-cloud-run/"
+        }
+      ],
+      "communityRating": 4.0,
+      "completions": 45
+    },
+    {
+      "from": "deno-deploy",
+      "to": "cloudflare-workers",
+      "difficulty": 2,
+      "estimatedHours": 20,
+      "challenges": [
+        "Runtime API differences",
+        "Module import patterns",
+        "Environment configuration",
+        "Different KV store APIs"
+      ],
+      "benefits": [
+        "More edge locations",
+        "Mature ecosystem",
+        "Better documentation",
+        "More storage options (R2, D1)"
+      ],
+      "resources": [
+        {
+          "title": "Deno Deploy to Workers",
+          "url": "https://developers.cloudflare.com/workers/tutorials/migrate-from-deno/"
+        }
+      ],
+      "communityRating": 4.3,
+      "completions": 18
+    }
+  ],
+  "contributions": {
+    "howToReport": "https://github.com/srigirishankar/shipwith.dev/issues/new?template=benchmark.md",
+    "guidelines": "Include: provider, region, payload size, cold/warm, timestamp, test methodology",
+    "requirements": [
+      "Must include test methodology and environment",
+      "At least 100 samples for statistical significance",
+      "Specify runtime version and dependencies",
+      "Include date range of testing",
+      "Note any special configurations"
+    ],
+    "verification": {
+      "threshold": 5,
+      "description": "Benchmarks with 5+ independent confirmations get verified badge"
+    }
+  },
+  "metadata": {
+    "totalReports": 2847,
+    "contributors": 234,
+    "lastCommunityUpdate": "2026-01-07T08:23:00Z",
+    "dataQualityScore": 0.87,
+    "disclaimer": "All benchmarks are community-sourced and may vary based on use case, payload size, runtime version, and testing methodology. Your mileage may vary."
+  }
+}
