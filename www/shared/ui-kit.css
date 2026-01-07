@@ -55,12 +55,17 @@
 
 /* Feature tab bar */
 .feature-tabs {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 1.5rem;
+  z-index: 100;
   display: flex;
   gap: var(--space-sm);
   padding: var(--space-sm) var(--space-md);
   background: var(--glass-bg);
   backdrop-filter: blur(var(--glass-blur));
-  border-bottom: 1px solid var(--glass-border);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
 }
 
 .feature-tab {
