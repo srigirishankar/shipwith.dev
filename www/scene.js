@@ -2,6 +2,7 @@
 // Wrapped for easy calling from Rust/WASM
 
 let scene, camera, renderer, controls;
+// Legacy arrays - now unused, kept for any old code compatibility
 let components = [];
 let connections = [];
 let particles = [];
@@ -10,7 +11,46 @@ let isExploded = false;
 let currentProvider = 'mixed';
 let isMixedMode = true;
 
-// Per-component provider selection (only used in mixed mode)
+// ============================================
+// SPLIT-SCREEN COMPARISON VIEW (Default mode)
+// Left = Pure Cloudflare, Right = Mixed/Customizable
+// ============================================
+let leftComponents = [];   // Pure CF (read-only reference)
+let rightComponents = [];  // Mixed (user can swap)
+let leftConnections = [];
+let rightConnections = [];
+let leftParticles = [];
+let rightParticles = [];
+
+// X-axis offsets for split view
+const LEFT_OFFSET = -5;
+const RIGHT_OFFSET = 5;
+
+// Debug mode - shows boundary lines for component areas
+const DEBUG_BOUNDS = true;
+let debugLines = [];
+
+// Panel dimensions (must match CSS)
+const PANEL_WIDTH_PX = 280;
+const PANEL_PADDING_PX = 16; // 1rem
+
+// Header height (column labels + dropdown) - viewport starts below this
+const HEADER_HEIGHT_PX = 80;
+
+// Dynamic view shift - calculated based on viewport
+let currentViewShift = 1.5;
+
+// Column shift for panel-open animation (components move left when panel opens)
+let leftColumnShift = 0;
+let rightColumnShift = 0;
+
+// Flag to disable animate loop's position lerping during reconstruct animation
+let isReconstructing = false;
+
+// Two cameras for split viewport
+let leftCamera, rightCamera;
+
+// Per-component provider selection (for right side - mixed mode)
 let componentProviders = {
     workers: 'cf',
     pages: 'cf',
@@ -20,6 +60,303 @@ let componentProviders = {
 
 // Swappable component IDs
 const SWAPPABLE_COMPONENTS = ['workers', 'pages', 'kv', 'd1'];
+
+// Also swappable: client-side tech
+const CLIENT_SWAPPABLE = ['wasm', 'threejs'];
+
+// ============================================
+// ALTERNATIVES DATABASE (Top 3 per component)
+// Based on deep research - includes dependencies & compatibility
+// ============================================
+
+const ALTERNATIVES = {
+    workers: {
+        current: { id: 'cf-workers', name: 'CF Workers', provider: 'cf', color: '#F6821F' },
+        options: [
+            {
+                id: 'vercel-edge',
+                name: 'Vercel Edge',
+                provider: 'vercel',
+                color: '#000000',
+                coldStart: '30ms',
+                cost: '$15/mo @10M req',
+                locations: '200+',
+                description: 'Next.js native, excellent DX',
+                docs: 'https://vercel.com/docs/functions/edge-functions',
+                pairsWellWith: ['vercel-hosting', 'upstash-redis', 'neon'],
+                warnings: { 'cf-pages': 'Cross-platform: may increase latency', 'cf-kv': 'Use Vercel KV instead' }
+            },
+            {
+                id: 'deno-deploy',
+                name: 'Deno Deploy',
+                provider: 'deno',
+                color: '#70FFAF',
+                coldStart: '20ms',
+                cost: '$20/mo @10M req',
+                locations: '12+',
+                description: 'Fastest cold starts, TypeScript-first',
+                docs: 'https://deno.com/deploy',
+                pairsWellWith: ['netlify-hosting', 'deno-kv', 'supabase'],
+                warnings: { 'cf-kv': 'Use Deno KV instead', 'cf-d1': 'Use Supabase instead' }
+            },
+            {
+                id: 'lambda-edge',
+                name: 'Lambda@Edge',
+                provider: 'aws',
+                color: '#FF9900',
+                coldStart: '100-1000ms',
+                cost: '$17/mo @10M req',
+                locations: '700+',
+                description: 'AWS ecosystem, enterprise-grade',
+                docs: 'https://docs.aws.amazon.com/lambda/latest/dg/lambda-edge.html',
+                pairsWellWith: ['amplify', 'dynamodb', 'aurora'],
+                warnings: { 'cf-pages': 'Use Amplify instead', 'cf-kv': 'Use DynamoDB instead' }
+            }
+        ]
+    },
+    pages: {
+        current: { id: 'cf-pages', name: 'CF Pages', provider: 'cf', color: '#F6821F' },
+        options: [
+            {
+                id: 'vercel-hosting',
+                name: 'Vercel',
+                provider: 'vercel',
+                color: '#000000',
+                cost: 'Free-$20/mo',
+                locations: '200+ (multi-cloud)',
+                description: 'Best Next.js support, instant deploys',
+                docs: 'https://vercel.com/docs',
+                pairsWellWith: ['vercel-edge', 'upstash-redis', 'neon'],
+                warnings: { 'cf-workers': 'Use Vercel Edge instead' }
+            },
+            {
+                id: 'netlify',
+                name: 'Netlify',
+                provider: 'netlify',
+                color: '#00C7B7',
+                cost: 'Free-$19/mo',
+                locations: '100+',
+                description: 'JAMstack specialist, great forms',
+                docs: 'https://docs.netlify.com/',
+                pairsWellWith: ['deno-deploy', 'upstash-redis', 'supabase'],
+                warnings: { 'cf-workers': 'Use Netlify Functions instead' }
+            },
+            {
+                id: 'amplify',
+                name: 'AWS Amplify',
+                provider: 'aws',
+                color: '#FF9900',
+                cost: '$1-3/mo hobby',
+                locations: '450+ (CloudFront)',
+                description: 'Full AWS integration, enterprise scale',
+                docs: 'https://docs.amplify.aws/',
+                pairsWellWith: ['lambda-edge', 'dynamodb', 'aurora'],
+                warnings: { 'cf-workers': 'Use Lambda@Edge instead', 'cf-kv': 'Use DynamoDB instead' }
+            }
+        ]
+    },
+    kv: {
+        current: { id: 'cf-kv', name: 'CF KV', provider: 'cf', color: '#F6821F' },
+        options: [
+            {
+                id: 'upstash-redis',
+                name: 'Upstash Redis',
+                provider: 'upstash',
+                color: '#00E9A3',
+                readLatency: '<5ms',
+                cost: '$0.20/100k req',
+                description: 'Sub-5ms global reads, Redis API',
+                docs: 'https://upstash.com/docs/redis/overall/getstarted',
+                pairsWellWith: ['vercel-edge', 'vercel-hosting', 'netlify'],
+                warnings: {}
+            },
+            {
+                id: 'momento',
+                name: 'Momento Cache',
+                provider: 'momento',
+                color: '#6366F1',
+                readLatency: '<5ms p999',
+                cost: '$1/M ops',
+                description: 'Lowest latency, serverless-native',
+                docs: 'https://docs.momentohq.com/',
+                pairsWellWith: ['vercel-edge', 'lambda-edge', 'deno-deploy'],
+                warnings: {}
+            },
+            {
+                id: 'dynamodb',
+                name: 'DynamoDB',
+                provider: 'aws',
+                color: '#FF9900',
+                readLatency: '~5ms',
+                cost: '$25/mo @10M',
+                description: 'AWS native, global tables',
+                docs: 'https://docs.aws.amazon.com/dynamodb/',
+                pairsWellWith: ['lambda-edge', 'amplify', 'aurora'],
+                warnings: { 'cf-workers': 'Higher latency from CF edge' }
+            }
+        ]
+    },
+    d1: {
+        current: { id: 'cf-d1', name: 'CF D1', provider: 'cf', color: '#F6821F' },
+        options: [
+            {
+                id: 'turso',
+                name: 'Turso',
+                provider: 'turso',
+                color: '#4FF8D2',
+                queryLatency: '<1ms reads',
+                cost: '$4.99/mo',
+                description: 'SQLite at edge, embedded replicas',
+                docs: 'https://docs.turso.tech/',
+                pairsWellWith: ['cf-workers', 'vercel-edge', 'deno-deploy'],
+                warnings: {}
+            },
+            {
+                id: 'neon',
+                name: 'Neon',
+                provider: 'neon',
+                color: '#00E599',
+                queryLatency: '3-8ms',
+                cost: '$0-30/mo',
+                description: 'Serverless Postgres, scale-to-zero',
+                docs: 'https://neon.tech/docs/',
+                pairsWellWith: ['vercel-edge', 'vercel-hosting', 'netlify'],
+                warnings: { 'lambda-edge': 'Cold start adds latency' }
+            },
+            {
+                id: 'planetscale',
+                name: 'PlanetScale',
+                provider: 'planetscale',
+                color: '#000000',
+                queryLatency: '50-67ms',
+                cost: '$40+/mo',
+                description: 'Vitess MySQL, 1M+ connections',
+                docs: 'https://planetscale.com/docs',
+                pairsWellWith: ['vercel-edge', 'lambda-edge', 'cf-workers'],
+                warnings: {}
+            }
+        ]
+    },
+    wasm: {
+        current: { id: 'rust-wasm', name: 'Rust/WASM', provider: 'rust', color: '#DEA584' },
+        options: [
+            {
+                id: 'assemblyscript',
+                name: 'AssemblyScript',
+                provider: 'assemblyscript',
+                color: '#007ACC',
+                performance: '95% of Rust',
+                bundleSize: '40-60% smaller',
+                description: 'TypeScript-like syntax, fast iteration',
+                docs: 'https://www.assemblyscript.org/introduction.html',
+                pairsWellWith: ['threejs', 'babylonjs'],
+                warnings: {}
+            },
+            {
+                id: 'swift-wasm',
+                name: 'Swift/WASM',
+                provider: 'apple',
+                color: '#F05138',
+                performance: '95-100% of Rust',
+                bundleSize: 'Medium',
+                description: 'iOS cross-platform, memory safe',
+                docs: 'https://swiftwasm.org/',
+                pairsWellWith: ['threejs', 'babylonjs'],
+                warnings: { 'note': 'Newer ecosystem, less tooling' }
+            },
+            {
+                id: 'kotlin-wasm',
+                name: 'Kotlin/WASM',
+                provider: 'jetbrains',
+                color: '#7F52FF',
+                performance: '85-90% of Rust',
+                bundleSize: 'Larger',
+                description: 'Android cross-platform, Compose UI',
+                docs: 'https://kotlinlang.org/docs/wasm-overview.html',
+                pairsWellWith: ['threejs', 'babylonjs'],
+                warnings: { 'note': 'Best for multiplatform teams' }
+            }
+        ]
+    },
+    threejs: {
+        current: { id: 'threejs', name: 'Three.js', provider: 'threejs', color: '#049EF4' },
+        options: [
+            {
+                id: 'babylonjs',
+                name: 'Babylon.js',
+                provider: 'microsoft',
+                color: '#BB464B',
+                bundleSize: '~400KB',
+                features: 'Physics, VR, full engine',
+                description: 'Microsoft-backed, batteries included',
+                docs: 'https://doc.babylonjs.com/',
+                pairsWellWith: ['rust-wasm', 'assemblyscript'],
+                warnings: { 'note': 'Larger bundle, more features' }
+            },
+            {
+                id: 'playcanvas',
+                name: 'PlayCanvas',
+                provider: 'playcanvas',
+                color: '#E05D44',
+                bundleSize: '~250KB',
+                features: 'Cloud editor, team collab',
+                description: 'Visual editor, great for teams',
+                docs: 'https://developer.playcanvas.com/',
+                pairsWellWith: ['rust-wasm', 'assemblyscript'],
+                warnings: {}
+            },
+            {
+                id: 'r3f',
+                name: 'React Three Fiber',
+                provider: 'pmndrs',
+                color: '#61DAFB',
+                bundleSize: '~175KB',
+                features: 'React integration, declarative',
+                description: 'React renderer for Three.js',
+                docs: 'https://docs.pmnd.rs/react-three-fiber/',
+                pairsWellWith: ['rust-wasm', 'vercel-hosting'],
+                warnings: { 'note': 'Requires React ecosystem' }
+            }
+        ]
+    }
+};
+
+// Dependency graph: which components naturally pair together
+const DEPENDENCY_GRAPH = {
+    'cf-workers': ['cf-pages', 'cf-kv', 'cf-d1', 'turso'],
+    'cf-pages': ['cf-workers', 'cf-kv', 'cf-d1'],
+    'cf-kv': ['cf-workers', 'cf-pages'],
+    'cf-d1': ['cf-workers', 'cf-pages'],
+    'vercel-edge': ['vercel-hosting', 'upstash-redis', 'neon', 'turso'],
+    'vercel-hosting': ['vercel-edge', 'upstash-redis', 'neon'],
+    'deno-deploy': ['netlify', 'upstash-redis', 'turso', 'supabase'],
+    'lambda-edge': ['amplify', 'dynamodb', 'aurora'],
+    'amplify': ['lambda-edge', 'dynamodb', 'aurora'],
+    'upstash-redis': ['vercel-edge', 'vercel-hosting', 'netlify', 'cf-workers'],
+    'momento': ['vercel-edge', 'lambda-edge', 'deno-deploy', 'cf-workers'],
+    'dynamodb': ['lambda-edge', 'amplify'],
+    'turso': ['cf-workers', 'vercel-edge', 'deno-deploy'],
+    'neon': ['vercel-edge', 'vercel-hosting', 'netlify'],
+    'planetscale': ['vercel-edge', 'lambda-edge', 'cf-workers']
+};
+
+// Suggested full stacks for auto-switching
+const RECOMMENDED_STACKS = {
+    'vercel': { workers: 'vercel-edge', pages: 'vercel-hosting', kv: 'upstash-redis', d1: 'neon' },
+    'aws': { workers: 'lambda-edge', pages: 'amplify', kv: 'dynamodb', d1: 'aurora' },
+    'deno': { workers: 'deno-deploy', pages: 'netlify', kv: 'upstash-redis', d1: 'turso' }
+};
+
+// ============================================
+// Comparison Mode State
+// ============================================
+let comparisonMode = false;
+let comparisonScene = null;  // Cloned scene for right side
+let comparisonState = {
+    left: { ...componentProviders },  // Current selection
+    right: null  // Alternative selection (null = not comparing)
+};
+let selectedAlternatives = {};  // Track per-component alternative selections
 
 // Raycasting for click detection
 let raycaster, mouse;
@@ -580,9 +917,79 @@ function createComponent(comp) {
     return mesh;
 }
 
-// Get component mesh by ID
-function getComponentById(id) {
-    return components.find(c => c.userData.id === id);
+// Create component mesh with x-offset for split-screen view
+function createComponentWithOffset(comp, xOffset, overrideName, overrideColor) {
+    const name = overrideName || comp.name;
+    const color = overrideColor || comp.color;
+
+    const { texture, canvas } = createLabelTexture(name, color, comp.id);
+    const geometry = new THREE.PlaneGeometry(1.8, 1.8);
+    const material = createGlassCardMaterial(texture, color);
+
+    const mesh = new THREE.Mesh(geometry, material);
+
+    // Apply x-offset to position
+    mesh.position.set(comp.pos.x + xOffset, comp.pos.y, comp.pos.z);
+    mesh.userData = {
+        id: comp.id,
+        name: name,
+        color: color,
+        canvas: canvas,
+        basePosition: { x: comp.pos.x + xOffset, y: comp.pos.y, z: comp.pos.z },
+        explodedPosition: { x: comp.exploded.x + xOffset, y: comp.exploded.y, z: comp.exploded.z },
+        xOffset: xOffset  // Store for reference
+    };
+
+    return mesh;
+}
+
+// Create connection with x-offset for split-screen view
+function createConnectionWithOffset(connDef, xOffset, componentList) {
+    // Find positions from the offset component list
+    const fromComp = componentList.find(c => c.userData.id === connDef.from);
+    const toComp = componentList.find(c => c.userData.id === connDef.to);
+
+    if (!fromComp || !toComp) return null;
+
+    const fromPos = fromComp.userData.basePosition;
+    const toPos = toComp.userData.basePosition;
+
+    const start = new THREE.Vector3(fromPos.x, fromPos.y, fromPos.z);
+    const end = new THREE.Vector3(toPos.x, toPos.y, toPos.z);
+
+    const mid = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
+    mid.y += 0.8;
+    mid.x += (end.x - start.x) * 0.2;
+
+    const curve = new THREE.QuadraticBezierCurve3(start, mid, end);
+    const points = curve.getPoints(32);
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+
+    const material = new THREE.LineBasicMaterial({
+        color: connDef.color,
+        transparent: true,
+        opacity: 0.6,
+        linewidth: 2
+    });
+
+    const line = new THREE.Line(geometry, material);
+    line.userData = {
+        from: connDef.from,
+        to: connDef.to,
+        label: connDef.label,
+        curve: curve,
+        baseFromPos: { ...fromPos },
+        baseToPos: { ...toPos },
+        xOffset: xOffset
+    };
+
+    return { line };
+}
+
+// Get component mesh by ID (defaults to right side which is editable)
+function getComponentById(id, side = 'right') {
+    const arr = side === 'left' ? leftComponents : rightComponents;
+    return arr.find(c => c.userData.id === id);
 }
 
 // Get component base position by ID
@@ -642,19 +1049,29 @@ function createParticle(connection) {
     const particle = new THREE.Mesh(geometry, material);
 
     // Random starting position along curve
+    const progress = Math.random();
     particle.userData = {
         connection: connection,
-        progress: Math.random(), // 0 to 1 along curve
+        progress: progress,
         speed: 0.003 + Math.random() * 0.002 // Varying speeds
     };
+
+    // Set initial position along the curve
+    const curve = connection.userData.curve;
+    if (curve) {
+        const pos = curve.getPoint(progress);
+        particle.position.copy(pos);
+    }
 
     return particle;
 }
 
 // Update connection curve based on current component positions
 function updateConnectionCurve(connection) {
-    const fromComp = getComponentById(connection.userData.from);
-    const toComp = getComponentById(connection.userData.to);
+    // Determine which side this connection is on based on stored xOffset
+    const side = connection.userData.xOffset === LEFT_OFFSET ? 'left' : 'right';
+    const fromComp = getComponentById(connection.userData.from, side);
+    const toComp = getComponentById(connection.userData.to, side);
     if (!fromComp || !toComp) return;
 
     const start = fromComp.position.clone();
@@ -679,13 +1096,38 @@ function onMouseMove(event) {
 
 // Handle click - raycast to find component
 function onClick(event) {
-    raycaster.setFromCamera(mouse, camera);
-    const intersects = raycaster.intersectObjects(components);
+    // Determine which side was clicked
+    const isRightSide = event.clientX > window.innerWidth / 2;
+    const activeCamera = isRightSide ? rightCamera : leftCamera;
+    const activeComponents = isRightSide ? rightComponents : leftComponents;
+
+    // Adjust mouse coordinates for the active viewport
+    const adjustedMouse = new THREE.Vector2();
+    if (isRightSide) {
+        // Right half: remap x from [0.5, 1] to [-1, 1]
+        adjustedMouse.x = ((event.clientX / window.innerWidth) - 0.5) * 4 - 1;
+    } else {
+        // Left half: remap x from [0, 0.5] to [-1, 1]
+        adjustedMouse.x = (event.clientX / window.innerWidth) * 4 - 1;
+    }
+    adjustedMouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+    raycaster.setFromCamera(adjustedMouse, activeCamera);
+    const intersects = raycaster.intersectObjects(activeComponents);
 
     if (intersects.length > 0) {
         const clickedComponent = intersects[0].object;
-        console.log('Clicked component:', clickedComponent.userData.id);
-        showInfoPanel(clickedComponent.userData.id);
+        const componentId = clickedComponent.userData.id;
+        console.log('Clicked component:', componentId, 'on', isRightSide ? 'RIGHT (Mixed)' : 'LEFT (CF)');
+
+        // Check if this is an affected component (has glow from alternative selection)
+        if (clickedComponent.userData.isAffected) {
+            const handled = handleAffectedComponentClick(componentId);
+            if (handled) return;
+        }
+
+        // Show info panel - editable only on right side
+        showInfoPanel(componentId, { editable: isRightSide, side: isRightSide ? 'right' : 'left' });
     }
 }
 
@@ -724,58 +1166,74 @@ function onTouchEnd(event) {
 
         // Detect tap: short duration + minimal movement
         if (touchDuration < TAP_THRESHOLD_MS && moveDistance < TAP_MOVE_THRESHOLD) {
-            // Update mouse to final touch position
-            mouse.x = (endX / window.innerWidth) * 2 - 1;
-            mouse.y = -(endY / window.innerHeight) * 2 + 1;
+            // Determine which side was tapped
+            const isRightSide = endX > window.innerWidth / 2;
+            const activeCamera = isRightSide ? rightCamera : leftCamera;
+            const activeComponents = isRightSide ? rightComponents : leftComponents;
 
-            // Perform raycast like click
-            raycaster.setFromCamera(mouse, camera);
-            const intersects = raycaster.intersectObjects(components);
+            // Adjust coordinates for the active viewport
+            const adjustedMouse = new THREE.Vector2();
+            if (isRightSide) {
+                adjustedMouse.x = ((endX / window.innerWidth) - 0.5) * 4 - 1;
+            } else {
+                adjustedMouse.x = (endX / window.innerWidth) * 4 - 1;
+            }
+            adjustedMouse.y = -(endY / window.innerHeight) * 2 + 1;
+
+            // Perform raycast
+            raycaster.setFromCamera(adjustedMouse, activeCamera);
+            const intersects = raycaster.intersectObjects(activeComponents);
 
             if (intersects.length > 0) {
                 const tappedComponent = intersects[0].object;
-                console.log('Tapped component:', tappedComponent.userData.id);
-                showInfoPanel(tappedComponent.userData.id);
+                console.log('Tapped component:', tappedComponent.userData.id, 'on', isRightSide ? 'RIGHT' : 'LEFT');
+                showInfoPanel(tappedComponent.userData.id, { editable: isRightSide, side: isRightSide ? 'right' : 'left' });
             }
         }
     }
 }
 
-// Track current panel component for provider switching
-let currentPanelComponentId = null;
+// Track current panel component for each side independently
+let leftPanelComponentId = null;
+let rightPanelComponentId = null;
+
+// Helper to get current panel component ID (defaults to right for backwards compatibility)
+function getCurrentPanelComponentId(side = 'right') {
+    return side === 'left' ? leftPanelComponentId : rightPanelComponentId;
+}
 
 // Show info panel for a component
-function showInfoPanel(componentId) {
-    const panel = document.getElementById('info-panel');
+function showInfoPanel(componentId, options = {}) {
+    const { editable = true, side = 'right' } = options;
+
+    // Get the correct panel based on side
+    const panelId = side === 'left' ? 'info-panel-left' : 'info-panel-right';
+    const panel = document.getElementById(panelId);
     if (!panel) return;
 
     const comp = COMPONENTS.find(c => c.id === componentId);
     const info = COMPONENT_INFO[componentId];
     if (!comp || !info) return;
 
-    currentPanelComponentId = componentId;
-
-    // Get display name based on mode
-    const displayName = getComponentDisplayName(componentId);
-
-    // Populate panel
-    document.getElementById('panel-title').textContent = displayName;
-    document.getElementById('panel-description').textContent = info.description;
-
-    // Show/hide provider selector (only in mixed mode for swappable components)
-    const providerSelector = document.getElementById('panel-provider-selector');
-    const providerSelect = document.getElementById('panel-provider-select');
-    if (providerSelector && providerSelect) {
-        if (isMixedMode && SWAPPABLE_COMPONENTS.includes(componentId)) {
-            providerSelector.classList.remove('hidden');
-            providerSelect.value = componentProviders[componentId];
-        } else {
-            providerSelector.classList.add('hidden');
-        }
+    // Track which component is shown on this side
+    if (side === 'left') {
+        leftPanelComponentId = componentId;
+    } else {
+        rightPanelComponentId = componentId;
     }
 
+    // Get display name based on mode
+    const displayName = side === 'left' ? comp.name : getComponentDisplayName(componentId);
+
+    // Update panel content using class selectors
+    panel.querySelector('.panel-title').textContent = displayName;
+    panel.querySelector('.panel-description').textContent = info.description;
+
+    // Populate alternatives dropdown (only for right/editable side)
+    populateAlternativesDropdown(panel, componentId, editable);
+
     // Populate reasons list
-    const reasonsList = document.getElementById('panel-reasons-list');
+    const reasonsList = panel.querySelector('.panel-reasons-list');
     reasonsList.innerHTML = '';
     info.reasons.forEach(reason => {
         const li = document.createElement('li');
@@ -784,11 +1242,11 @@ function showInfoPanel(componentId) {
     });
 
     // Setup docs link - use provider-specific URL if available
-    const docsLink = document.getElementById('panel-docs-link');
+    const docsLink = panel.querySelector('.panel-docs-link');
     let docsUrl = info.docs;
 
-    // Check for provider-specific alternative
-    if (currentProvider !== 'cf' && info.alternatives && info.alternatives[currentProvider]) {
+    // Check for provider-specific alternative (only relevant for right side)
+    if (side === 'right' && currentProvider !== 'cf' && info.alternatives && info.alternatives[currentProvider]) {
         docsUrl = info.alternatives[currentProvider].url;
     }
 
@@ -801,15 +1259,610 @@ function showInfoPanel(componentId) {
         docsLink.style.display = 'none';
     }
 
+    // Setup close button
+    const closeBtn = panel.querySelector('.close-panel');
+    closeBtn.onclick = () => hideInfoPanel(side);
+
+    // Animate components left to make room for panel
+    if (side === 'left') {
+        leftColumnShift = -1.0; // Shift left by 1 unit
+    } else {
+        rightColumnShift = -1.0;
+    }
+
     // Show panel
     panel.classList.remove('hidden');
 }
 
-// Hide info panel
-function hideInfoPanel() {
-    const panel = document.getElementById('info-panel');
-    if (panel) {
-        panel.classList.add('hidden');
+// Populate alternatives dropdown for a component (panel is the DOM element)
+function populateAlternativesDropdown(panel, componentId, editable = true) {
+    const alternativesDiv = panel.querySelector('.panel-alternatives');
+    const alternativesSelect = panel.querySelector('.panel-alternatives-select');
+    const applyBtn = panel.querySelector('.btn-apply-alt');
+    const altDetails = panel.querySelector('.panel-alt-details');
+    const warningDiv = panel.querySelector('.panel-compatibility-warning');
+    const legendDiv = panel.querySelector('.affected-legend');
+
+    // Left panel doesn't have alternatives elements
+    if (!alternativesDiv || !alternativesSelect) return;
+
+    // Hide alternatives for non-editable (left side) panels
+    if (!editable) {
+        alternativesDiv.classList.add('hidden');
+        if (applyBtn) applyBtn.classList.add('hidden');
+        if (altDetails) altDetails.classList.add('hidden');
+        if (legendDiv) legendDiv.classList.add('hidden');
+        return;
+    }
+
+    // Check if this component has alternatives
+    const altData = ALTERNATIVES[componentId];
+    if (!altData || !altData.options || altData.options.length === 0) {
+        alternativesDiv.classList.add('hidden');
+        if (applyBtn) applyBtn.classList.add('hidden');
+        if (altDetails) altDetails.classList.add('hidden');
+        if (legendDiv) legendDiv.classList.add('hidden');
+        return;
+    }
+
+    // Show the dropdown
+    alternativesDiv.classList.remove('hidden');
+
+    // Clear and populate options
+    alternativesSelect.innerHTML = '<option value="">Select alternative...</option>';
+    altData.options.forEach(alt => {
+        const option = document.createElement('option');
+        option.value = alt.id;
+        option.textContent = alt.name;
+        option.style.color = alt.color;
+        alternativesSelect.appendChild(option);
+    });
+
+    // Reset selection and hide apply button initially
+    alternativesSelect.value = selectedAlternatives[componentId] || '';
+    if (applyBtn) applyBtn.classList.add('hidden');
+    if (altDetails) altDetails.classList.add('hidden');
+    if (warningDiv) warningDiv.classList.add('hidden');
+    if (legendDiv) legendDiv.classList.add('hidden');
+
+    // Clear any previous visual feedback
+    clearAlternativeVisualFeedback();
+
+    // If there was a previous selection, show its details
+    if (selectedAlternatives[componentId]) {
+        showAlternativeDetails(panel, componentId, selectedAlternatives[componentId]);
+    }
+
+    // Setup event listener for alternatives select
+    alternativesSelect.onchange = (e) => {
+        const alternativeId = e.target.value;
+        if (alternativeId) {
+            selectedAlternatives[componentId] = alternativeId;
+            showAlternativeDetails(panel, componentId, alternativeId);
+        } else {
+            delete selectedAlternatives[componentId];
+            const info = COMPONENT_INFO[componentId];
+            if (info) {
+                panel.querySelector('.panel-description').textContent = info.description;
+            }
+            if (altDetails) altDetails.classList.add('hidden');
+            if (applyBtn) applyBtn.classList.add('hidden');
+            if (warningDiv) warningDiv.classList.add('hidden');
+            clearAlternativeVisualFeedback();
+        }
+    };
+
+    // Setup apply button
+    if (applyBtn) {
+        applyBtn.onclick = () => {
+            const alternativeId = alternativesSelect.value;
+            if (alternativeId) {
+                applyAlternative(componentId, alternativeId);
+                hideInfoPanel('right');
+            }
+        };
+    }
+}
+
+// Show details for a selected alternative (panel is the DOM element)
+function showAlternativeDetails(panel, componentId, alternativeId) {
+    const altData = ALTERNATIVES[componentId];
+    if (!altData) return;
+
+    const alternative = altData.options.find(a => a.id === alternativeId);
+    if (!alternative) return;
+
+    // Update description to show alternative's description
+    const descEl = panel.querySelector('.panel-description');
+    if (descEl) {
+        descEl.innerHTML = `<strong style="color: ${alternative.color}">${alternative.name}:</strong> ${alternative.description}`;
+    }
+
+    // Show metrics
+    const altDetails = panel.querySelector('.panel-alt-details');
+    const metric1 = panel.querySelector('.alt-metric-1');
+    const metric2 = panel.querySelector('.alt-metric-2');
+
+    if (altDetails && metric1 && metric2) {
+        altDetails.classList.remove('hidden');
+
+        // Pick the most relevant metrics for this component type
+        if (alternative.coldStart) {
+            metric1.innerHTML = `<strong>${alternative.coldStart}</strong>Cold Start`;
+        } else if (alternative.readLatency) {
+            metric1.innerHTML = `<strong>${alternative.readLatency}</strong>Read Latency`;
+        } else if (alternative.queryLatency) {
+            metric1.innerHTML = `<strong>${alternative.queryLatency}</strong>Query Latency`;
+        } else if (alternative.performance) {
+            metric1.innerHTML = `<strong>${alternative.performance}</strong>Performance`;
+        } else if (alternative.bundleSize) {
+            metric1.innerHTML = `<strong>${alternative.bundleSize}</strong>Bundle Size`;
+        } else {
+            metric1.innerHTML = '';
+        }
+
+        if (alternative.cost) {
+            metric2.innerHTML = `<strong>${alternative.cost}</strong>Cost`;
+        } else if (alternative.locations) {
+            metric2.innerHTML = `<strong>${alternative.locations}</strong>Locations`;
+        } else if (alternative.features) {
+            metric2.innerHTML = `<strong>${alternative.features}</strong>Features`;
+        } else {
+            metric2.innerHTML = '';
+        }
+    }
+
+    // Check for compatibility warnings with current stack
+    showCompatibilityWarnings(panel, componentId, alternative);
+
+    // Update docs link
+    const docsLink = panel.querySelector('.panel-docs-link');
+    if (docsLink && alternative.docs) {
+        docsLink.href = alternative.docs;
+        docsLink.style.display = 'inline';
+    }
+
+    // Show visual feedback on canvas (connection colors + component glows)
+    showAlternativeVisualFeedback(componentId, alternativeId);
+
+    // Show apply button
+    const applyBtn = panel.querySelector('.btn-apply-alt');
+    if (applyBtn) {
+        applyBtn.classList.remove('hidden');
+        applyBtn.textContent = `Switch to ${alternative.name}`;
+    }
+}
+
+// Show compatibility warnings for selected alternative (panel is the DOM element)
+function showCompatibilityWarnings(panel, componentId, alternative) {
+    const warningDiv = panel.querySelector('.panel-compatibility-warning');
+    const warningText = panel.querySelector('.warning-text');
+
+    if (!warningDiv || !warningText) return;
+
+    // Component display names for clearer warnings
+    const componentNames = {
+        workers: 'Compute',
+        pages: 'Hosting',
+        kv: 'KV Store',
+        d1: 'Database'
+    };
+
+    // Check warnings against current stack
+    const warnings = [];
+
+    // Check against current component selections
+    for (const [currentCompId, currentProvider] of Object.entries(componentProviders)) {
+        if (currentCompId === componentId) continue;
+
+        const currentAltId = `cf-${currentCompId}`;
+
+        // Skip warning if we already have a recommendation for this component via pairsWellWith
+        const hasRecommendation = alternative.pairsWellWith?.some(pairedId => {
+            const altData = ALTERNATIVES[currentCompId];
+            return altData?.options.some(opt => opt.id === pairedId);
+        });
+
+        // Only show warning if no recommendation exists for this component
+        if (!hasRecommendation && alternative.warnings && alternative.warnings[currentAltId]) {
+            const compName = componentNames[currentCompId] || currentCompId;
+            warnings.push(`${compName}: ${alternative.warnings[currentAltId]}`);
+        }
+    }
+
+    // Check for general notes
+    if (alternative.warnings && alternative.warnings.note) {
+        warnings.push(alternative.warnings.note);
+    }
+
+    if (warnings.length > 0) {
+        warningDiv.classList.remove('hidden');
+        warningText.textContent = warnings.join(' • ');
+    } else {
+        warningDiv.classList.add('hidden');
+    }
+}
+
+// Get recommended dependent switches when an alternative is selected
+function getRecommendedSwitches(componentId, alternativeId) {
+    const recommendations = [];
+    const altData = ALTERNATIVES[componentId];
+    if (!altData) return recommendations;
+
+    const alternative = altData.options.find(a => a.id === alternativeId);
+    if (!alternative || !alternative.pairsWellWith) return recommendations;
+
+    // For each other swappable component, check if we should suggest switching
+    const allSwappable = [...SWAPPABLE_COMPONENTS, ...CLIENT_SWAPPABLE];
+
+    for (const otherCompId of allSwappable) {
+        if (otherCompId === componentId) continue;
+
+        const otherAltData = ALTERNATIVES[otherCompId];
+        if (!otherAltData) continue;
+
+        // Check if any of the paired alternatives match this component
+        for (const pairedId of alternative.pairsWellWith) {
+            const matchingAlt = otherAltData.options.find(a => a.id === pairedId);
+            if (matchingAlt) {
+                recommendations.push({
+                    componentId: otherCompId,
+                    alternativeId: pairedId,
+                    alternativeName: matchingAlt.name,
+                    reason: `Pairs well with ${alternative.name}`
+                });
+                break; // Only one recommendation per component
+            }
+        }
+    }
+
+    return recommendations;
+}
+
+// ============================================
+// VISUAL FEEDBACK SYSTEM
+// Connection colors + Component glow for alternative selection
+// ============================================
+
+// Track currently affected components for visual highlighting
+let affectedComponents = new Map(); // componentId -> { status: 'recommended'|'warning', alternativeId, alternativeName }
+let originalConnectionColors = new Map(); // Store original colors to restore later
+
+// Show visual feedback when an alternative is selected
+function showAlternativeVisualFeedback(componentId, alternativeId) {
+    // Clear previous effects
+    clearAlternativeVisualFeedback();
+
+    const altData = ALTERNATIVES[componentId];
+    if (!altData) return;
+
+    const alternative = altData.options.find(a => a.id === alternativeId);
+    if (!alternative) return;
+
+    // Get recommendations (components that pair well)
+    const recommendations = getRecommendedSwitches(componentId, alternativeId);
+
+    // Track affected components
+    recommendations.forEach(rec => {
+        affectedComponents.set(rec.componentId, {
+            status: 'recommended',
+            alternativeId: rec.alternativeId,
+            alternativeName: rec.alternativeName,
+            reason: rec.reason
+        });
+    });
+
+    // Check for warnings (incompatible current selections)
+    if (alternative.warnings) {
+        for (const [warningKey, warningMsg] of Object.entries(alternative.warnings)) {
+            if (warningKey === 'note') continue;
+            // warningKey format: 'cf-pages' or 'cf-kv'
+            const compId = warningKey.replace('cf-', '');
+            if (SWAPPABLE_COMPONENTS.includes(compId) && !affectedComponents.has(compId)) {
+                affectedComponents.set(compId, {
+                    status: 'warning',
+                    alternativeId: null,
+                    alternativeName: null,
+                    reason: warningMsg
+                });
+            }
+        }
+    }
+
+    // Update connection colors
+    updateConnectionColors(componentId, alternative);
+
+    // Update component glows
+    updateComponentGlows();
+
+    // Update the affected legend in the panel
+    updateAffectedLegend();
+}
+
+// Update connection colors based on compatibility (right side only - editable)
+function updateConnectionColors(sourceComponentId, alternative) {
+    rightConnections.forEach(conn => {
+        const fromId = conn.userData.from;
+        const toId = conn.userData.to;
+
+        // Store original color if not already stored
+        if (!originalConnectionColors.has(conn)) {
+            originalConnectionColors.set(conn, conn.material.color.getHex());
+        }
+
+        // Check if this connection involves the source component or affected components
+        const involvesSource = fromId === sourceComponentId || toId === sourceComponentId;
+        const otherEndId = fromId === sourceComponentId ? toId : (toId === sourceComponentId ? fromId : null);
+
+        if (involvesSource && otherEndId) {
+            const affected = affectedComponents.get(otherEndId);
+            if (affected) {
+                if (affected.status === 'recommended') {
+                    // Green for recommended
+                    conn.material.color.setHex(0x10B981);
+                    conn.material.opacity = 0.9;
+                } else if (affected.status === 'warning') {
+                    // Orange/red for warning
+                    conn.material.color.setHex(0xF59E0B);
+                    conn.material.opacity = 0.9;
+                }
+            }
+        }
+
+        // Also highlight connections between affected components
+        const fromAffected = affectedComponents.get(fromId);
+        const toAffected = affectedComponents.get(toId);
+        if (fromAffected && toAffected) {
+            if (fromAffected.status === 'recommended' && toAffected.status === 'recommended') {
+                conn.material.color.setHex(0x10B981);
+                conn.material.opacity = 0.9;
+            }
+        }
+    });
+}
+
+// Update component glow effects (right side only - editable)
+function updateComponentGlows() {
+    rightComponents.forEach(comp => {
+        const affected = affectedComponents.get(comp.userData.id);
+
+        if (affected) {
+            // Set glow color based on status
+            if (affected.status === 'recommended') {
+                // Green glow for recommended
+                if (comp.material.uniforms) {
+                    comp.material.uniforms.glowColor.value.setHex(0x10B981);
+                    comp.material.uniforms.glowIntensity.value = 1.5;
+                }
+            } else if (affected.status === 'warning') {
+                // Orange glow for warning
+                if (comp.material.uniforms) {
+                    comp.material.uniforms.glowColor.value.setHex(0xF59E0B);
+                    comp.material.uniforms.glowIntensity.value = 1.5;
+                }
+            }
+            // Mark as affected for click handling
+            comp.userData.isAffected = true;
+            comp.userData.affectedData = affected;
+        } else {
+            // Dim non-affected components slightly
+            if (comp.material.uniforms && comp.userData.id !== rightPanelComponentId) {
+                comp.material.uniforms.glowIntensity.value = 0.3;
+            }
+            comp.userData.isAffected = false;
+            comp.userData.affectedData = null;
+        }
+    });
+}
+
+// Update the affected components legend in the info panel (right panel only)
+function updateAffectedLegend() {
+    const rightPanel = document.getElementById('info-panel-right');
+    if (!rightPanel) return;
+
+    const legendDiv = rightPanel.querySelector('.affected-legend');
+    const listDiv = rightPanel.querySelector('.affected-list');
+
+    if (!legendDiv || !listDiv) return;
+
+    if (affectedComponents.size === 0) {
+        legendDiv.classList.add('hidden');
+        return;
+    }
+
+    legendDiv.classList.remove('hidden');
+    listDiv.innerHTML = '';
+
+    affectedComponents.forEach((data, compId) => {
+        const item = document.createElement('div');
+        item.className = 'legend-item';
+
+        const dot = document.createElement('span');
+        dot.className = `legend-dot ${data.status}`;
+
+        const text = document.createElement('span');
+        text.className = 'legend-text';
+
+        // Get current component name
+        const comp = COMPONENTS.find(c => c.id === compId);
+        const currentName = comp ? getComponentDisplayName(compId) : compId;
+
+        if (data.status === 'recommended') {
+            text.innerHTML = `<strong>${currentName}</strong> → ${data.alternativeName}`;
+        } else {
+            text.innerHTML = `<strong>${currentName}</strong>: ${data.reason}`;
+        }
+
+        item.appendChild(dot);
+        item.appendChild(text);
+        listDiv.appendChild(item);
+    });
+}
+
+// Clear all visual feedback
+function clearAlternativeVisualFeedback() {
+    // Restore original connection colors
+    originalConnectionColors.forEach((color, conn) => {
+        conn.material.color.setHex(color);
+        conn.material.opacity = 0.6;
+    });
+    originalConnectionColors.clear();
+
+    // Restore component glows to original colors (right side only - editable)
+    rightComponents.forEach(comp => {
+        const compDef = COMPONENTS.find(c => c.id === comp.userData.id);
+        if (compDef && comp.material.uniforms) {
+            // Reset to original color
+            comp.material.uniforms.glowColor.value.set(compDef.color);
+            comp.material.uniforms.glowIntensity.value = 0.6;
+        }
+        comp.userData.isAffected = false;
+        comp.userData.affectedData = null;
+    });
+
+    // Clear affected map
+    affectedComponents.clear();
+
+    // Hide legend in right panel
+    const rightPanel = document.getElementById('info-panel-right');
+    const legendDiv = rightPanel?.querySelector('.affected-legend');
+    if (legendDiv) legendDiv.classList.add('hidden');
+}
+
+// Handle click on affected component - show panel with recommended pre-selected (right side only)
+function handleAffectedComponentClick(componentId) {
+    const affected = affectedComponents.get(componentId);
+    if (!affected) return false;
+
+    // Always show the panel on the right side (affected components are only on right)
+    showInfoPanel(componentId, { editable: true, side: 'right' });
+
+    // If recommended, pre-select the alternative in dropdown
+    if (affected.status === 'recommended' && affected.alternativeId) {
+        // Small delay to ensure panel is rendered
+        setTimeout(() => {
+            const rightPanel = document.getElementById('info-panel-right');
+            const select = rightPanel?.querySelector('.panel-alternatives-select');
+            if (select) {
+                select.value = affected.alternativeId;
+                // Trigger change event to show details and visual feedback
+                select.dispatchEvent(new Event('change'));
+            }
+        }, 50);
+    }
+
+    return true;
+}
+
+// Apply an alternative to a specific component
+function applyAlternativeToComponent(componentId, alternativeId, alternativeName) {
+    console.log(`Applying ${alternativeName} to ${componentId}`);
+
+    // Get the alternative data
+    const altData = ALTERNATIVES[componentId];
+    if (!altData) return;
+
+    const alternative = altData.options.find(a => a.id === alternativeId);
+    if (!alternative) return;
+
+    // Update the component's texture to show the new name and color (right side - editable)
+    const comp = rightComponents.find(c => c.userData.id === componentId);
+    if (comp) {
+        // Update the shader glow color
+        if (comp.material.uniforms) {
+            comp.material.uniforms.glowColor.value.set(alternative.color);
+        }
+
+        // Recreate the texture with new name
+        updateComponentTextureWithAlternative(comp, alternativeName, alternative.color);
+    }
+
+    // Mark this as switched in our state
+    selectedAlternatives[componentId] = alternativeId;
+
+    // Remove from affected list since it's now applied
+    affectedComponents.delete(componentId);
+
+    // Update visual feedback
+    updateComponentGlows();
+    updateAffectedLegend();
+
+    // Flash effect to confirm
+    flashComponent(comp, alternative.color);
+}
+
+// Update component texture with alternative name/color
+function updateComponentTextureWithAlternative(mesh, name, color) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 512;
+    const ctx = canvas.getContext('2d');
+
+    // Use the existing drawComponentCard function style
+    drawComponentCard(ctx, name, color, 512);
+
+    // Update texture
+    if (mesh.material.uniforms && mesh.material.uniforms.cardTexture) {
+        const newTexture = new THREE.CanvasTexture(canvas);
+        mesh.material.uniforms.cardTexture.value = newTexture;
+        mesh.material.uniforms.glowColor.value.set(color);
+    } else if (mesh.material.map) {
+        mesh.material.map = new THREE.CanvasTexture(canvas);
+        mesh.material.map.needsUpdate = true;
+    }
+}
+
+// Flash effect on component to confirm switch
+function flashComponent(mesh, color) {
+    if (!mesh || !mesh.material.uniforms) return;
+
+    const originalIntensity = mesh.material.uniforms.glowIntensity.value;
+    let flashCount = 0;
+    const maxFlashes = 3;
+
+    function flash() {
+        flashCount++;
+        mesh.material.uniforms.glowIntensity.value = 2.0;
+
+        setTimeout(() => {
+            mesh.material.uniforms.glowIntensity.value = 0.5;
+            if (flashCount < maxFlashes) {
+                setTimeout(flash, 100);
+            } else {
+                mesh.material.uniforms.glowIntensity.value = 0.6;
+            }
+        }, 100);
+    }
+
+    flash();
+}
+
+// ============================================
+// END VISUAL FEEDBACK SYSTEM
+// ============================================
+
+// Hide info panel for a specific side (or both if no side specified)
+function hideInfoPanel(side) {
+    if (side === 'left' || !side) {
+        const leftPanel = document.getElementById('info-panel-left');
+        if (leftPanel) {
+            leftPanel.classList.add('hidden');
+        }
+        leftPanelComponentId = null;
+        // Reset column shift - components animate back to center
+        leftColumnShift = 0;
+    }
+
+    if (side === 'right' || !side) {
+        const rightPanel = document.getElementById('info-panel-right');
+        if (rightPanel) {
+            rightPanel.classList.add('hidden');
+            // Clear visual feedback only when right panel closes (it has alternatives)
+            clearAlternativeVisualFeedback();
+        }
+        rightPanelComponentId = null;
+        // Reset column shift - components animate back to center
+        rightColumnShift = 0;
     }
 }
 
@@ -818,40 +1871,77 @@ function calculateMixedMetrics() {
     let totalCost = 0;
     let maxLatency = 0;
 
+    // Location map for providers
+    const locationMap = {
+        'cf': 300, 'gcp': 35, 'aws': 400, 'azure': 60,
+        'vercel': 200, 'netlify': 100, 'deno': 12,
+        'upstash': 200, 'turso': 50, 'neon': 15
+    };
+    let minLocations = 300;
+
     SWAPPABLE_COMPONENTS.forEach(id => {
         const provider = componentProviders[id];
         totalCost += COMPONENT_COSTS[id]?.[provider] || 0;
         maxLatency = Math.max(maxLatency, COMPONENT_LATENCY[id]?.[provider] || 0);
+        minLocations = Math.min(minLocations, locationMap[provider] || 300);
     });
 
     return {
         cost: totalCost === 0 ? '$0' : `$${totalCost}/mo`,
         latency: `${maxLatency}ms`,
-        uptime: '99.97%', // Weighted average approximation
-        locations: 'Varies'
+        uptime: '99.97%',
+        locations: `${minLocations}+`
     };
 }
 
-// Update cost matrix display
+// Update comparison table display (for split view)
 function updateMetrics() {
-    // Update mixed row with current calculations
+    // Update mixed (right side) with current calculations
     const mixedMetrics = calculateMixedMetrics();
+
+    // Update Mixed column
     const mixedCostEl = document.getElementById('mixed-cost');
     const mixedLatencyEl = document.getElementById('mixed-latency');
+    const mixedLocationsEl = document.getElementById('mixed-locations');
 
     if (mixedCostEl) mixedCostEl.textContent = mixedMetrics.cost;
     if (mixedLatencyEl) mixedLatencyEl.textContent = mixedMetrics.latency;
+    if (mixedLocationsEl) mixedLocationsEl.textContent = mixedMetrics.locations || '300+';
 
-    // Update row highlighting based on current provider
-    const rows = document.querySelectorAll('#cost-matrix-body tr');
-    rows.forEach(row => {
-        const rowProvider = row.dataset.provider;
-        if (rowProvider === currentProvider) {
-            row.classList.add('current');
-        } else {
-            row.classList.remove('current');
-        }
+    // CF column is static - always shows pure Cloudflare values
+    const cfCostEl = document.getElementById('cf-cost');
+    const cfLatencyEl = document.getElementById('cf-latency');
+    const cfLocationsEl = document.getElementById('cf-locations');
+
+    if (cfCostEl) cfCostEl.textContent = '$0';
+    if (cfLatencyEl) cfLatencyEl.textContent = '20ms';
+    if (cfLocationsEl) cfLocationsEl.textContent = '300+';
+}
+
+// Calculate metrics for the current mixed configuration
+function calculateMixedLocations() {
+    // Find minimum edge locations among selected providers
+    const locationMap = {
+        'cf': 300,
+        'gcp': 35,
+        'aws': 400,
+        'azure': 60,
+        'vercel': 200,
+        'netlify': 100,
+        'deno': 12,
+        'upstash': 200,
+        'turso': 50,
+        'neon': 15
+    };
+
+    let minLocations = 300;
+    SWAPPABLE_COMPONENTS.forEach(id => {
+        const provider = componentProviders[id];
+        const locations = locationMap[provider] || 300;
+        minLocations = Math.min(minLocations, locations);
     });
+
+    return minLocations + '+';
 }
 
 // Handle provider change - update components and metrics
@@ -875,13 +1965,26 @@ function onProviderChange(provider) {
     // Update metrics/matrix
     updateMetrics();
 
+    // Update comparison table column header to show selected provider
+    const mixedColumnHeader = document.querySelector('#comparison-table th.mixed-column');
+    if (mixedColumnHeader) {
+        const providerNames = {
+            'mixed': 'Mixed',
+            'cf': 'Cloudflare',
+            'aws': 'AWS',
+            'gcp': 'GCP',
+            'azure': 'Azure'
+        };
+        mixedColumnHeader.textContent = providerNames[provider] || provider;
+    }
+
     // Close info panel (provider context changed)
     hideInfoPanel();
 }
 
-// Update a single component's texture based on its provider
+// Update a single component's texture based on its provider (right side - editable)
 function updateSingleComponentTexture(componentId) {
-    const mesh = components.find(m => m.userData.id === componentId);
+    const mesh = rightComponents.find(m => m.userData.id === componentId);
     if (!mesh) return;
 
     const provider = componentProviders[componentId];
@@ -903,9 +2006,9 @@ function updateSingleComponentTexture(componentId) {
     mesh.userData.canvas = canvas;
 }
 
-// Update all swappable component textures
+// Update all swappable component textures (right side - editable)
 function updateAllComponentTextures() {
-    components.forEach(mesh => {
+    rightComponents.forEach(mesh => {
         const id = mesh.userData.id;
         if (SWAPPABLE_COMPONENTS.includes(id)) {
             updateSingleComponentTexture(id);
@@ -933,14 +2036,97 @@ function getComponentDisplayName(componentId) {
     return providerComp.name;
 }
 
-// Initialize the Three.js scene
+// ============================================
+// RESPONSIVE CAMERA & DEBUG HELPERS
+// ============================================
+
+// Calculate camera params based on viewport size
+function calculateCameraParams(viewportWidth, viewportHeight) {
+    const halfAspect = (viewportWidth / 2) / viewportHeight;
+    const fovRad = (60 * Math.PI) / 180;
+
+    // Calculate camera Z to fit components (z range roughly -4 to +4)
+    const verticalExtent = 10; // Total z-depth we want visible
+    const baseCameraZ = (verticalExtent / 2) / Math.tan(fovRad / 2);
+    const cameraZ = Math.max(16, baseCameraZ);
+
+    // Calculate horizontal frustum width at this Z distance
+    const halfFrustumWidth = cameraZ * Math.tan(fovRad / 2) * halfAspect;
+
+    // Calculate view shift: center components in the space LEFT of the info panel
+    // Info panel takes (PANEL_WIDTH_PX + PANEL_PADDING_PX) pixels from the right of each half
+    const halfViewportPx = viewportWidth / 2;
+    const panelFraction = (PANEL_WIDTH_PX + PANEL_PADDING_PX * 2) / halfViewportPx;
+
+    // The viewShift moves the camera (and lookAt) right,
+    // which makes components appear shifted LEFT on screen
+    // We want components centered in the remaining space (left of panel)
+    const viewShift = halfFrustumWidth * panelFraction * 0.5;
+
+    return { cameraZ, viewShift, halfFrustumWidth };
+}
+
+// Create debug boundary lines to visualize component bounds
+function createDebugBounds(cameraZ, halfFrustumWidth) {
+    if (!DEBUG_BOUNDS) return;
+
+    // Remove existing debug lines
+    debugLines.forEach(line => scene.remove(line));
+    debugLines = [];
+
+    const debugMaterial = new THREE.LineBasicMaterial({ color: 0xff00ff, transparent: true, opacity: 0.5 });
+    const debugMaterialGreen = new THREE.LineBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.5 });
+    const debugMaterialYellow = new THREE.LineBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.5 });
+
+    // Vertical extent for debug lines
+    const yMin = -2, yMax = 3;
+    const zMin = -6, zMax = 6;
+
+    // Helper to create a vertical line at x position
+    function createVerticalLine(x, material, layer) {
+        const points = [
+            new THREE.Vector3(x, yMin, zMin),
+            new THREE.Vector3(x, yMin, zMax),
+            new THREE.Vector3(x, yMax, zMax),
+            new THREE.Vector3(x, yMax, zMin),
+            new THREE.Vector3(x, yMin, zMin)
+        ];
+        const geometry = new THREE.BufferGeometry().setFromPoints(points);
+        const line = new THREE.Line(geometry, material);
+        line.layers.set(layer);
+        scene.add(line);
+        debugLines.push(line);
+    }
+
+    // LEFT COLUMN bounds (layer 1)
+    // Left edge of left column viewport (where browser edge is visible)
+    createVerticalLine(LEFT_OFFSET + currentViewShift - halfFrustumWidth, debugMaterial, 1);
+    // Right edge of left column (center divider)
+    createVerticalLine(LEFT_OFFSET + currentViewShift + halfFrustumWidth, debugMaterialGreen, 1);
+    // Panel start boundary (where components should stay left of)
+    const panelBoundLeft = LEFT_OFFSET + currentViewShift + halfFrustumWidth * 0.5;
+    createVerticalLine(panelBoundLeft, debugMaterialYellow, 1);
+
+    // RIGHT COLUMN bounds (layer 2)
+    // Left edge of right column (center divider)
+    createVerticalLine(RIGHT_OFFSET + currentViewShift - halfFrustumWidth, debugMaterialGreen, 2);
+    // Right edge of right column (browser edge)
+    createVerticalLine(RIGHT_OFFSET + currentViewShift + halfFrustumWidth, debugMaterial, 2);
+    // Panel start boundary
+    const panelBoundRight = RIGHT_OFFSET + currentViewShift + halfFrustumWidth * 0.5;
+    createVerticalLine(panelBoundRight, debugMaterialYellow, 2);
+
+    console.log('Debug bounds created:', { halfFrustumWidth, currentViewShift });
+}
+
+// Initialize the Three.js scene with split-screen view
 window.initScene = function() {
     if (isInitialized) {
         console.log('Scene already initialized');
         return;
     }
 
-    console.log('Initializing Three.js scene...');
+    console.log('Initializing Three.js scene with split-screen view...');
 
     const canvas = document.getElementById('scene');
     if (!canvas) {
@@ -952,11 +2138,29 @@ window.initScene = function() {
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x1d1d1d);
 
-    // Camera - positioned to see all components
-    const aspect = window.innerWidth / window.innerHeight;
-    camera = new THREE.PerspectiveCamera(60, aspect, 0.1, 1000);
-    camera.position.set(0, 2, 8);
-    camera.lookAt(0, 0, 0);
+    // Calculate responsive camera params based on viewport (adjusted for header)
+    const adjustedHeight = window.innerHeight - HEADER_HEIGHT_PX;
+    const { cameraZ, viewShift, halfFrustumWidth } = calculateCameraParams(
+        window.innerWidth,
+        adjustedHeight
+    );
+    currentViewShift = viewShift;
+
+    // Two cameras for split viewport - half aspect ratio each (adjusted for header)
+    const halfAspect = (window.innerWidth / 2) / adjustedHeight;
+
+    // Left camera (Cloudflare side) - shifted to make room for panel on right of left column
+    leftCamera = new THREE.PerspectiveCamera(60, halfAspect, 0.1, 1000);
+    leftCamera.position.set(LEFT_OFFSET + currentViewShift, 1, cameraZ);
+    leftCamera.lookAt(LEFT_OFFSET + currentViewShift, -0.5, 0);
+
+    // Right camera (Mixed side) - shifted to make room for panel on right of right column
+    rightCamera = new THREE.PerspectiveCamera(60, halfAspect, 0.1, 1000);
+    rightCamera.position.set(RIGHT_OFFSET + currentViewShift, 1, cameraZ);
+    rightCamera.lookAt(RIGHT_OFFSET + currentViewShift, -0.5, 0);
+
+    // Main camera (for backwards compatibility)
+    camera = leftCamera;
 
     // Renderer
     renderer = new THREE.WebGLRenderer({
@@ -965,46 +2169,87 @@ window.initScene = function() {
     });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setScissorTest(true);  // Enable scissor for split view
 
-    // Orbit Controls
-    controls = new THREE.OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
-    controls.minDistance = 5;
-    controls.maxDistance = 30;
-    controls.enablePan = false;
-    controls.target.set(0, 0, 0);
+    // Disable orbit controls for split view (each side is independent)
+    controls = null;
 
     // Raycaster for click detection
     raycaster = new THREE.Raycaster();
+    // Enable raycaster to test against layers 1 and 2 (left and right components)
+    raycaster.layers.enable(1);
+    raycaster.layers.enable(2);
     mouse = new THREE.Vector2();
 
-    // Create all components
+    // =============================================
+    // Create LEFT side components (Pure Cloudflare)
+    // Use layer 1 for left side
+    // =============================================
     COMPONENTS.forEach(comp => {
-        const mesh = createComponent(comp);
+        const mesh = createComponentWithOffset(comp, LEFT_OFFSET);
+        mesh.layers.set(1);  // Left side = layer 1
+        mesh.userData.side = 'left';
         scene.add(mesh);
-        components.push(mesh);
+        leftComponents.push(mesh);
     });
-    console.log(`Added ${components.length} components to scene`);
+    console.log(`Added ${leftComponents.length} LEFT (CF) components`);
 
-    // Create all connections
+    // Create LEFT side connections
     CONNECTIONS.forEach(connDef => {
-        const result = createConnection(connDef);
+        const result = createConnectionWithOffset(connDef, LEFT_OFFSET, leftComponents);
         if (result) {
-            const { line } = result;
-            scene.add(line);
-            connections.push(line);
+            result.line.layers.set(1);  // Left side = layer 1
+            scene.add(result.line);
+            leftConnections.push(result.line);
 
-            // Add 2-3 particles per connection
+            // Add particles
             const numParticles = 2 + Math.floor(Math.random() * 2);
             for (let i = 0; i < numParticles; i++) {
-                const particle = createParticle(line);
+                const particle = createParticle(result.line);
+                particle.layers.set(1);  // Left side = layer 1
                 scene.add(particle);
-                particles.push(particle);
+                leftParticles.push(particle);
             }
         }
     });
-    console.log(`Added ${connections.length} connections with ${particles.length} particles`);
+
+    // =============================================
+    // Create RIGHT side components (Mixed - editable)
+    // Use layer 2 for right side
+    // =============================================
+    COMPONENTS.forEach(comp => {
+        const mesh = createComponentWithOffset(comp, RIGHT_OFFSET);
+        mesh.layers.set(2);  // Right side = layer 2
+        mesh.userData.side = 'right';
+        scene.add(mesh);
+        rightComponents.push(mesh);
+    });
+    console.log(`Added ${rightComponents.length} RIGHT (Mixed) components`);
+
+    // Create RIGHT side connections
+    CONNECTIONS.forEach(connDef => {
+        const result = createConnectionWithOffset(connDef, RIGHT_OFFSET, rightComponents);
+        if (result) {
+            result.line.layers.set(2);  // Right side = layer 2
+            scene.add(result.line);
+            rightConnections.push(result.line);
+
+            // Add particles
+            const numParticles = 2 + Math.floor(Math.random() * 2);
+            for (let i = 0; i < numParticles; i++) {
+                const particle = createParticle(result.line);
+                particle.layers.set(2);  // Right side = layer 2
+                scene.add(particle);
+                rightParticles.push(particle);
+            }
+        }
+    });
+
+    // Set camera layers - each camera only sees its side
+    leftCamera.layers.set(1);   // Left camera sees layer 1
+    rightCamera.layers.set(2);  // Right camera sees layer 2
+
+    console.log(`Created ${leftComponents.length} LEFT + ${rightComponents.length} RIGHT components`);
 
     // Handle resize
     window.addEventListener('resize', onResize);
@@ -1018,11 +2263,14 @@ window.initScene = function() {
     canvas.addEventListener('touchmove', onTouchMove, { passive: true });
     canvas.addEventListener('touchend', onTouchEnd, { passive: true });
 
-    // Apply initial mixed mode textures
-    updateAllComponentTextures();
+    // Apply initial textures (right side shows mixed mode names)
+    updateRightSideTextures();
 
     // Initialize metrics display
     updateMetrics();
+
+    // Create debug bounds visualization
+    createDebugBounds(cameraZ, halfFrustumWidth);
 
     // Start animation loop
     isInitialized = true;
@@ -1034,76 +2282,169 @@ window.initScene = function() {
 function onResize() {
     const width = window.innerWidth;
     const height = window.innerHeight;
+    const adjustedHeight = height - HEADER_HEIGHT_PX;
 
-    camera.aspect = width / height;
-    camera.updateProjectionMatrix();
+    // Recalculate responsive camera params (use adjusted height for proper aspect)
+    const { cameraZ, viewShift, halfFrustumWidth } = calculateCameraParams(width, adjustedHeight);
+    currentViewShift = viewShift;
+
+    const halfAspect = (width / 2) / adjustedHeight;
+
+    // Update both cameras for split view
+    if (leftCamera) {
+        leftCamera.aspect = halfAspect;
+        leftCamera.position.set(LEFT_OFFSET + currentViewShift, 1, cameraZ);
+        leftCamera.lookAt(LEFT_OFFSET + currentViewShift, -0.5, 0);
+        leftCamera.updateProjectionMatrix();
+    }
+    if (rightCamera) {
+        rightCamera.aspect = halfAspect;
+        rightCamera.position.set(RIGHT_OFFSET + currentViewShift, 1, cameraZ);
+        rightCamera.lookAt(RIGHT_OFFSET + currentViewShift, -0.5, 0);
+        rightCamera.updateProjectionMatrix();
+    }
+
+    // Legacy camera update (for backwards compatibility)
+    if (camera && camera !== leftCamera && camera !== rightCamera) {
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+    }
+
     renderer.setSize(width, height);
+
+    // Update debug bounds
+    createDebugBounds(cameraZ, halfFrustumWidth);
 }
 
 function animate() {
     requestAnimationFrame(animate);
 
     const time = Date.now() * 0.001;  // Time in seconds
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    const halfWidth = Math.floor(width / 2);
 
-    // Update orbit controls (for damping)
+    // Update orbit controls (for damping) - if enabled
     if (controls) {
         controls.update();
     }
 
-    // Detect hovered component via raycasting
-    if (raycaster && mouse && camera) {
-        raycaster.setFromCamera(mouse, camera);
-        const intersects = raycaster.intersectObjects(components);
+    // Detect hovered component via raycasting (check both sides)
+    if (raycaster && mouse) {
+        const isRightSide = mouse.x > 0;  // mouse.x is normalized -1 to 1
+        const activeCamera = isRightSide ? rightCamera : leftCamera;
+        const activeComponents = isRightSide ? rightComponents : leftComponents;
+
+        // Adjust mouse for the active viewport
+        const adjustedMouse = new THREE.Vector2();
+        if (isRightSide) {
+            adjustedMouse.x = (mouse.x - 0) * 2 - 1;  // Remap right half
+        } else {
+            adjustedMouse.x = (mouse.x + 1) * 2 - 1;  // Remap left half
+        }
+        adjustedMouse.y = mouse.y;
+
+        raycaster.setFromCamera(adjustedMouse, activeCamera);
+        const intersects = raycaster.intersectObjects(activeComponents);
         hoveredComponent = intersects.length > 0 ? intersects[0].object : null;
     }
 
-    // Make components face the camera (billboard effect) + update shader uniforms
-    components.forEach((mesh, i) => {
-        mesh.lookAt(camera.position);
+    // Update LEFT side components (face left camera + apply column shift)
+    leftComponents.forEach((mesh, i) => {
+        mesh.lookAt(leftCamera.position);
+        updateComponentUniforms(mesh, time, i, leftComponents);
 
-        // Update shader uniforms for glass effects
-        if (mesh.material.uniforms) {
-            // Time for rotating gradient border
-            mesh.material.uniforms.time.value = time;
-
-            // Pulse phase (offset per component for variety)
-            mesh.material.uniforms.pulsePhase.value = time * 2 + i * 0.7;
-
-            // Hover effect (smooth lerp toward target)
-            const isHovered = hoveredComponent === mesh;
-            const targetHover = isHovered ? 1.0 : 0.0;
-            const currentHover = mesh.material.uniforms.hoverAmount.value;
-            mesh.material.uniforms.hoverAmount.value += (targetHover - currentHover) * 0.12;
+        // Animate position shift when panel opens/closes (skip during reconstruct/explode animations)
+        if (!isExploded && !isReconstructing) {
+            const targetX = mesh.userData.basePosition.x + leftColumnShift;
+            mesh.position.x += (targetX - mesh.position.x) * 0.1; // Smooth lerp
         }
-
-        // Subtle breathing scale animation (2% variation)
-        const breath = 1.0 + Math.sin(time * 1.5 + i * 0.5) * 0.015;
-        mesh.scale.setScalar(1.8 * breath);
     });
 
-    // Update connection curves to follow component positions
-    connections.forEach(conn => {
+    // Update RIGHT side components (face right camera + apply column shift)
+    rightComponents.forEach((mesh, i) => {
+        mesh.lookAt(rightCamera.position);
+        updateComponentUniforms(mesh, time, i, rightComponents);
+
+        // Animate position shift when panel opens/closes (skip during reconstruct/explode animations)
+        if (!isExploded && !isReconstructing) {
+            const targetX = mesh.userData.basePosition.x + rightColumnShift;
+            mesh.position.x += (targetX - mesh.position.x) * 0.1; // Smooth lerp
+        }
+    });
+
+    // Update connection curves (both sides)
+    [...leftConnections, ...rightConnections].forEach(conn => {
         updateConnectionCurve(conn);
     });
 
-    // Animate particles along their curves
-    particles.forEach(particle => {
+    // Animate particles along their curves (both sides)
+    [...leftParticles, ...rightParticles].forEach(particle => {
         const conn = particle.userData.connection;
         const curve = conn.userData.curve;
         if (!curve) return;
 
-        // Move particle along curve
         particle.userData.progress += particle.userData.speed;
         if (particle.userData.progress > 1) {
             particle.userData.progress = 0;
         }
 
-        // Get position on curve
         const pos = curve.getPoint(particle.userData.progress);
         particle.position.copy(pos);
     });
 
-    renderer.render(scene, camera);
+    // =============================================
+    // SPLIT VIEWPORT RENDERING
+    // =============================================
+
+    // Adjust height to leave space for header (column labels + dropdown)
+    const adjustedHeight = height - HEADER_HEIGHT_PX;
+
+    // Left viewport (Cloudflare Native)
+    renderer.setViewport(0, 0, halfWidth, adjustedHeight);
+    renderer.setScissor(0, 0, halfWidth, adjustedHeight);
+    renderer.render(scene, leftCamera);
+
+    // Right viewport (Mixed/Customizable)
+    renderer.setViewport(halfWidth, 0, halfWidth, adjustedHeight);
+    renderer.setScissor(halfWidth, 0, halfWidth, adjustedHeight);
+    renderer.render(scene, rightCamera);
+}
+
+// Helper function to update component shader uniforms
+function updateComponentUniforms(mesh, time, index, componentList) {
+    if (mesh.material.uniforms) {
+        mesh.material.uniforms.time.value = time;
+        mesh.material.uniforms.pulsePhase.value = time * 2 + index * 0.7;
+
+        const isHovered = hoveredComponent === mesh;
+        const targetHover = isHovered ? 1.0 : 0.0;
+        const currentHover = mesh.material.uniforms.hoverAmount.value;
+        mesh.material.uniforms.hoverAmount.value += (targetHover - currentHover) * 0.12;
+    }
+
+    // Breathing animation
+    const breath = 1.0 + Math.sin(time * 1.5 + index * 0.5) * 0.015;
+    mesh.scale.setScalar(1.8 * breath);
+}
+
+// Update right side textures to show mixed mode names
+function updateRightSideTextures() {
+    rightComponents.forEach(mesh => {
+        const compId = mesh.userData.id;
+        if (SWAPPABLE_COMPONENTS.includes(compId)) {
+            const displayName = getComponentDisplayName(compId);
+            const provider = componentProviders[compId] || 'cf';
+            const color = PROVIDER_COLORS[provider] || mesh.userData.color;
+
+            // Update texture with new name
+            const { texture } = createLabelTexture(displayName, color, compId);
+            if (mesh.material.uniforms && mesh.material.uniforms.cardTexture) {
+                mesh.material.uniforms.cardTexture.value = texture;
+                mesh.material.uniforms.glowColor.value.set(color);
+            }
+        }
+    });
 }
 
 // Expose scene objects for later use
@@ -1115,43 +2456,13 @@ window.getRenderer = function() { return renderer; };
 window.initButtons = function() {
     const btnDeconstruct = document.getElementById('btn-deconstruct');
     const btnReconstruct = document.getElementById('btn-reconstruct');
-    const btnClosePanel = document.getElementById('close-panel');
     const providerSelect = document.getElementById('provider-select');
-    const panelProviderSelect = document.getElementById('panel-provider-select');
 
     if (providerSelect) {
         providerSelect.addEventListener('change', (e) => {
             onProviderChange(e.target.value);
         });
     }
-
-    // Panel provider selector - switch individual component provider
-    if (panelProviderSelect) {
-        panelProviderSelect.addEventListener('change', (e) => {
-            if (currentPanelComponentId && SWAPPABLE_COMPONENTS.includes(currentPanelComponentId)) {
-                // Update this component's provider
-                componentProviders[currentPanelComponentId] = e.target.value;
-                // Update the component's texture
-                updateSingleComponentTexture(currentPanelComponentId);
-                // Update metrics
-                updateMetrics();
-                // Update panel title to reflect new name
-                document.getElementById('panel-title').textContent = getComponentDisplayName(currentPanelComponentId);
-            }
-        });
-    }
-
-    // Cost matrix row click handlers
-    const matrixRows = document.querySelectorAll('#cost-matrix-body tr');
-    matrixRows.forEach(row => {
-        row.addEventListener('click', () => {
-            const provider = row.dataset.provider;
-            if (provider && providerSelect) {
-                providerSelect.value = provider;
-                onProviderChange(provider);
-            }
-        });
-    });
 
     if (btnDeconstruct) {
         btnDeconstruct.addEventListener('click', () => {
@@ -1171,12 +2482,436 @@ window.initButtons = function() {
         });
     }
 
-    if (btnClosePanel) {
-        btnClosePanel.addEventListener('click', () => {
-            hideInfoPanel();
-        });
-    }
+    // Note: Panel close buttons and alternatives dropdowns are now handled
+    // in showInfoPanel() and populateAlternativesDropdown() respectively
 };
+
+// ============================================
+// COMPARISON MODE
+// Split-screen to compare current vs alternative
+// ============================================
+
+let comparisonRenderer = null;
+let comparisonCamera = null;
+let comparisonControls = null;
+let comparisonComponents = [];
+let isComparisonMode = false;
+
+// Enter comparison mode - split screen with current on left, alternative on right
+function enterComparisonMode(componentId, alternativeId) {
+    if (isComparisonMode) return;
+    isComparisonMode = true;
+
+    console.log(`Entering comparison mode: ${componentId} -> ${alternativeId}`);
+
+    // Get recommended switches for dependent components
+    const recommendations = getRecommendedSwitches(componentId, alternativeId);
+    console.log('Recommended switches:', recommendations);
+
+    // Hide info panel during transition
+    hideInfoPanel();
+
+    // Add comparison mode class to body
+    document.body.classList.add('comparison-mode');
+
+    // Create the split-screen layout
+    createComparisonLayout(componentId, alternativeId, recommendations);
+}
+
+// Create the split-screen layout with two canvases
+function createComparisonLayout(componentId, alternativeId, recommendations) {
+    const sceneWrapper = document.getElementById('scene-wrapper');
+    const originalCanvas = document.getElementById('scene');
+
+    // Create container for split view
+    const splitContainer = document.createElement('div');
+    splitContainer.id = 'split-container';
+    splitContainer.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        z-index: 1;
+    `;
+
+    // Left side (current)
+    const leftSide = document.createElement('div');
+    leftSide.className = 'scene-half left';
+    leftSide.style.cssText = 'flex: 1; position: relative; border-right: 2px solid #F6821F;';
+
+    // Label for left side
+    const leftLabel = document.createElement('div');
+    leftLabel.className = 'comparison-label current';
+    leftLabel.textContent = 'Current Stack';
+    leftSide.appendChild(leftLabel);
+
+    // Move original canvas to left side
+    leftSide.appendChild(originalCanvas);
+
+    // Right side (alternative)
+    const rightSide = document.createElement('div');
+    rightSide.className = 'scene-half right';
+    rightSide.style.cssText = 'flex: 1; position: relative;';
+
+    // Label for right side
+    const altData = ALTERNATIVES[componentId];
+    const alternative = altData?.options.find(a => a.id === alternativeId);
+    const rightLabel = document.createElement('div');
+    rightLabel.className = 'comparison-label alternative';
+    rightLabel.textContent = alternative ? `With ${alternative.name}` : 'Alternative';
+    rightSide.appendChild(rightLabel);
+
+    // Create second canvas for alternative view
+    const altCanvas = document.createElement('canvas');
+    altCanvas.id = 'scene-alt';
+    altCanvas.style.cssText = 'width: 100%; height: 100%;';
+    rightSide.appendChild(altCanvas);
+
+    // Build the layout
+    splitContainer.appendChild(leftSide);
+    splitContainer.appendChild(rightSide);
+    sceneWrapper.appendChild(splitContainer);
+
+    // Initialize the second renderer
+    initComparisonRenderer(altCanvas, componentId, alternativeId, recommendations);
+
+    // Resize both canvases
+    onComparisonResize();
+
+    // Add exit button
+    addExitComparisonButton();
+
+    // Animate the split
+    animateSplitTransition();
+}
+
+// Initialize the comparison (right side) renderer
+function initComparisonRenderer(canvas, componentId, alternativeId, recommendations) {
+    const width = canvas.clientWidth || window.innerWidth / 2;
+    const height = canvas.clientHeight || window.innerHeight;
+
+    // Create comparison scene (clone of main scene structure)
+    const compScene = new THREE.Scene();
+    compScene.background = new THREE.Color(0x1a1a2e);
+
+    // Camera
+    comparisonCamera = new THREE.PerspectiveCamera(60, width / height, 0.1, 1000);
+    comparisonCamera.position.copy(camera.position);
+    comparisonCamera.lookAt(0, 0, 0);
+
+    // Renderer
+    comparisonRenderer = new THREE.WebGLRenderer({
+        canvas: canvas,
+        antialias: true
+    });
+    comparisonRenderer.setSize(width, height);
+    comparisonRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+    // Orbit controls for comparison view
+    comparisonControls = new THREE.OrbitControls(comparisonCamera, canvas);
+    comparisonControls.enableDamping = true;
+    comparisonControls.dampingFactor = 0.05;
+    comparisonControls.minDistance = 5;
+    comparisonControls.maxDistance = 30;
+
+    // Clone components with alternative selections
+    createComparisonComponents(compScene, componentId, alternativeId, recommendations);
+
+    // Store scene for animation loop
+    comparisonScene = compScene;
+
+    // Start comparison render loop
+    animateComparison();
+}
+
+// Create components for comparison scene with alternatives applied
+function createComparisonComponents(compScene, changedComponentId, alternativeId, recommendations) {
+    // Build alternative selections map
+    const altSelections = { ...componentProviders };
+
+    // The main component change
+    const altData = ALTERNATIVES[changedComponentId];
+    const alternative = altData?.options.find(a => a.id === alternativeId);
+
+    // Apply recommended switches
+    const altComponentNames = {};
+    altComponentNames[changedComponentId] = alternative?.name || alternativeId;
+
+    recommendations.forEach(rec => {
+        altComponentNames[rec.componentId] = rec.alternativeName;
+    });
+
+    // Create components similar to main scene
+    COMPONENTS.forEach((compDef, index) => {
+        const size = 1.5;
+
+        // Create canvas texture for this component
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 512;
+        const ctx = canvas.getContext('2d');
+
+        // Determine color and name based on alternatives
+        let displayName = compDef.name;
+        let displayColor = compDef.color;
+
+        if (altComponentNames[compDef.id]) {
+            displayName = altComponentNames[compDef.id];
+            // Get color from alternative
+            const alt = altData?.options.find(a => a.name === displayName);
+            if (alt) displayColor = alt.color;
+            // Check recommendations too
+            const rec = recommendations.find(r => r.componentId === compDef.id);
+            if (rec) {
+                const recAltData = ALTERNATIVES[compDef.id];
+                const recAlt = recAltData?.options.find(a => a.id === rec.alternativeId);
+                if (recAlt) displayColor = recAlt.color;
+            }
+        }
+
+        // Draw the card (similar to main scene)
+        drawComponentCard(ctx, displayName, displayColor, 512);
+
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.needsUpdate = true;
+
+        const material = new THREE.MeshBasicMaterial({
+            map: texture,
+            transparent: true,
+            side: THREE.DoubleSide
+        });
+
+        const geometry = new THREE.PlaneGeometry(size, size);
+        const mesh = new THREE.Mesh(geometry, material);
+
+        // Use exploded positions
+        const pos = isExploded ? compDef.exploded : compDef.pos;
+        mesh.position.set(pos.x, pos.y, pos.z);
+
+        mesh.userData = {
+            id: compDef.id,
+            name: displayName,
+            originalPos: compDef.pos,
+            explodedPos: compDef.exploded
+        };
+
+        compScene.add(mesh);
+        comparisonComponents.push(mesh);
+    });
+
+    // Add connections (simplified for comparison view)
+    CONNECTIONS.forEach(connDef => {
+        const fromComp = comparisonComponents.find(c => c.userData.id === connDef.from);
+        const toComp = comparisonComponents.find(c => c.userData.id === connDef.to);
+        if (!fromComp || !toComp) return;
+
+        const start = fromComp.position.clone();
+        const end = toComp.position.clone();
+        const mid = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
+        mid.y += 0.8 * (isExploded ? 2 : 1);
+
+        const curve = new THREE.QuadraticBezierCurve3(start, mid, end);
+        const points = curve.getPoints(32);
+
+        const geometry = new THREE.BufferGeometry().setFromPoints(points);
+        const material = new THREE.LineBasicMaterial({
+            color: connDef.color || '#666666',
+            linewidth: 2,
+            transparent: true,
+            opacity: 0.6
+        });
+
+        const line = new THREE.Line(geometry, material);
+        compScene.add(line);
+    });
+}
+
+// Helper to draw component card (reuse from main scene style)
+function drawComponentCard(ctx, name, color, size) {
+    // Clear
+    ctx.clearRect(0, 0, size, size);
+
+    // Background (dark glass)
+    ctx.fillStyle = 'rgba(20, 20, 30, 0.9)';
+    ctx.beginPath();
+    ctx.roundRect(20, 20, size - 40, size - 40, 20);
+    ctx.fill();
+
+    // Border
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.roundRect(20, 20, size - 40, size - 40, 20);
+    ctx.stroke();
+
+    // Inner glow
+    const gradient = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+    gradient.addColorStop(0, color + '20');
+    gradient.addColorStop(1, 'transparent');
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.roundRect(20, 20, size - 40, size - 40, 20);
+    ctx.fill();
+
+    // Name text
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 48px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(name, size/2, size/2);
+}
+
+// Animation loop for comparison view
+function animateComparison() {
+    if (!isComparisonMode || !comparisonRenderer) return;
+
+    requestAnimationFrame(animateComparison);
+
+    // Update controls
+    if (comparisonControls) {
+        comparisonControls.update();
+    }
+
+    // Make components face camera
+    comparisonComponents.forEach(mesh => {
+        mesh.lookAt(comparisonCamera.position);
+    });
+
+    // Render
+    if (comparisonScene) {
+        comparisonRenderer.render(comparisonScene, comparisonCamera);
+    }
+}
+
+// Animate the split transition
+function animateSplitTransition() {
+    // The CSS transition handles the visual split
+    // Just update camera position for better view
+    const targetZ = camera.position.z * 1.2; // Zoom out slightly
+
+    const startZ = camera.position.z;
+    const duration = 500;
+    const startTime = Date.now();
+
+    function animate() {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+
+        camera.position.z = startZ + (targetZ - startZ) * eased;
+        if (comparisonCamera) {
+            comparisonCamera.position.z = camera.position.z;
+        }
+
+        if (progress < 1) {
+            requestAnimationFrame(animate);
+        }
+    }
+
+    animate();
+}
+
+// Handle resize in comparison mode
+function onComparisonResize() {
+    if (!isComparisonMode) return;
+
+    const width = window.innerWidth / 2;
+    const height = window.innerHeight;
+
+    // Update main renderer
+    renderer.setSize(width, height);
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+
+    // Update comparison renderer
+    if (comparisonRenderer) {
+        comparisonRenderer.setSize(width, height);
+        comparisonCamera.aspect = width / height;
+        comparisonCamera.updateProjectionMatrix();
+    }
+}
+
+// Add exit comparison button
+function addExitComparisonButton() {
+    const btn = document.createElement('button');
+    btn.id = 'btn-exit-comparison';
+    btn.textContent = '× Exit Comparison';
+    btn.style.cssText = `
+        position: fixed;
+        top: 1rem;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 300;
+        padding: 0.75rem 1.5rem;
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        border: 1px solid #F6821F;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+    `;
+    btn.addEventListener('click', exitComparisonMode);
+    btn.addEventListener('mouseenter', () => {
+        btn.style.background = '#F6821F';
+    });
+    btn.addEventListener('mouseleave', () => {
+        btn.style.background = 'rgba(0, 0, 0, 0.8)';
+    });
+    document.body.appendChild(btn);
+}
+
+// Exit comparison mode
+function exitComparisonMode() {
+    if (!isComparisonMode) return;
+    isComparisonMode = false;
+
+    console.log('Exiting comparison mode');
+
+    // Remove comparison mode class
+    document.body.classList.remove('comparison-mode');
+
+    // Remove split container
+    const splitContainer = document.getElementById('split-container');
+    if (splitContainer) {
+        // Move original canvas back
+        const originalCanvas = document.getElementById('scene');
+        const sceneWrapper = document.getElementById('scene-wrapper');
+        if (originalCanvas && sceneWrapper) {
+            sceneWrapper.appendChild(originalCanvas);
+        }
+        splitContainer.remove();
+    }
+
+    // Remove exit button
+    const exitBtn = document.getElementById('btn-exit-comparison');
+    if (exitBtn) exitBtn.remove();
+
+    // Clean up comparison renderer
+    if (comparisonRenderer) {
+        comparisonRenderer.dispose();
+        comparisonRenderer = null;
+    }
+    comparisonCamera = null;
+    comparisonControls = null;
+    comparisonComponents = [];
+    comparisonScene = null;
+
+    // Reset main renderer size
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+
+    // Clear selected alternatives
+    selectedAlternatives = {};
+}
+
+// ============================================
+// END COMPARISON MODE
+// ============================================
 
 // Explode animation - arrange as architecture diagram
 function explodeComponents() {
@@ -1189,15 +2924,18 @@ function explodeComponents() {
     const duration = 1000;
     const startTime = Date.now();
 
+    // Combine both sides for animation
+    const allComponents = [...leftComponents, ...rightComponents];
+
     // Store starting positions
-    const startPositions = components.map(mesh => ({
+    const startPositions = allComponents.map(mesh => ({
         x: mesh.position.x,
         y: mesh.position.y,
         z: mesh.position.z
     }));
 
     // Use explicit exploded positions for architecture diagram layout
-    const targetPositions = components.map(mesh => mesh.userData.explodedPosition);
+    const targetPositions = allComponents.map(mesh => mesh.userData.explodedPosition);
 
     function step() {
         const elapsed = Date.now() - startTime;
@@ -1205,7 +2943,7 @@ function explodeComponents() {
         // Ease out cubic
         const eased = 1 - Math.pow(1 - progress, 3);
 
-        components.forEach((mesh, i) => {
+        allComponents.forEach((mesh, i) => {
             mesh.position.x = startPositions[i].x + (targetPositions[i].x - startPositions[i].x) * eased;
             mesh.position.y = startPositions[i].y + (targetPositions[i].y - startPositions[i].y) * eased;
             mesh.position.z = startPositions[i].z + (targetPositions[i].z - startPositions[i].z) * eased;
@@ -1217,14 +2955,15 @@ function explodeComponents() {
     }
     step();
 
-    // Camera: front view to see flat diagram
-    animateCamera({ x: 0, y: 1, z: 16 });
+    // Note: Don't animate camera - keep split-screen cameras in place
+    // Components animate to exploded positions within each viewport
 }
 
 // Reconstruct animation - bring components back together
 function reconstructComponents() {
     if (!isExploded) return;
     isExploded = false;
+    isReconstructing = true;  // Disable animate loop's lerping during animation
 
     // Show coming-soon panel again
     document.getElementById('coming-soon')?.classList.remove('scene-exploded');
@@ -1232,12 +2971,28 @@ function reconstructComponents() {
     const duration = 800;
     const startTime = Date.now();
 
+    // Combine both sides for animation
+    const allComponents = [...leftComponents, ...rightComponents];
+
     // Store starting positions
-    const startPositions = components.map(mesh => ({
+    const startPositions = allComponents.map(mesh => ({
         x: mesh.position.x,
         y: mesh.position.y,
         z: mesh.position.z
     }));
+
+    // Get current camera params for proper target positions
+    const { cameraZ } = calculateCameraParams(window.innerWidth, window.innerHeight);
+
+    // Reset cameras to proper split-screen positions immediately
+    if (leftCamera) {
+        leftCamera.position.set(LEFT_OFFSET + currentViewShift, 1, cameraZ);
+        leftCamera.lookAt(LEFT_OFFSET + currentViewShift, -0.5, 0);
+    }
+    if (rightCamera) {
+        rightCamera.position.set(RIGHT_OFFSET + currentViewShift, 1, cameraZ);
+        rightCamera.lookAt(RIGHT_OFFSET + currentViewShift, -0.5, 0);
+    }
 
     function step() {
         const elapsed = Date.now() - startTime;
@@ -1245,21 +3000,27 @@ function reconstructComponents() {
         // Ease out cubic
         const eased = 1 - Math.pow(1 - progress, 3);
 
-        components.forEach((mesh, i) => {
+        allComponents.forEach((mesh, i) => {
             const base = mesh.userData.basePosition;
-            mesh.position.x = startPositions[i].x + (base.x - startPositions[i].x) * eased;
+            // Account for any active column shift (panel open)
+            const columnShift = mesh.userData.side === 'left' ? leftColumnShift : rightColumnShift;
+            const targetX = base.x + columnShift;
+
+            mesh.position.x = startPositions[i].x + (targetX - startPositions[i].x) * eased;
             mesh.position.y = startPositions[i].y + (base.y - startPositions[i].y) * eased;
             mesh.position.z = startPositions[i].z + (base.z - startPositions[i].z) * eased;
         });
 
         if (progress < 1) {
             requestAnimationFrame(step);
+        } else {
+            // Animation complete - re-enable animate loop's lerping
+            isReconstructing = false;
+            // Trigger the same recalculation as browser resize
+            onResize();
         }
     }
     step();
-
-    // Also zoom camera back in
-    animateCamera({ x: 0, y: 2, z: 8 });
 }
 
 // Animate camera to target position

@@ -29,40 +29,55 @@
 </head>
 <body>
     <div id="app-container">
-        <div id="cost-matrix">
+        <!-- Column Labels for Split View -->
+        <div id="column-labels">
+            <div class="column-label left">
+                <span class="label-icon">☁️</span>
+                <span class="label-text">CLOUDFLARE NATIVE</span>
+            </div>
+            <div class="column-label right">
+                <div class="label-row">
+                    <span class="label-icon">⚡</span>
+                    <span class="label-text">MIXED (CLICK TO CUSTOMIZE)</span>
+                </div>
+                <select id="provider-select">
+                    <option value="mixed" selected>Mixed (Best of All)</option>
+                    <option value="cf">Cloudflare</option>
+                    <option value="gcp">Google Cloud</option>
+                    <option value="aws">AWS</option>
+                    <option value="azure">Azure</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Center Divider -->
+        <div id="center-divider"></div>
+
+        <!-- Comparison Table (Bottom) -->
+        <div id="comparison-table">
             <table>
                 <thead>
                     <tr>
-                        <th>Configuration</th>
-                        <th>Cost</th>
-                        <th>Latency</th>
+                        <th>Metric</th>
+                        <th class="cf-column">Cloudflare</th>
+                        <th class="mixed-column">Mixed</th>
                     </tr>
                 </thead>
-                <tbody id="cost-matrix-body">
-                    <tr class="current" data-provider="mixed">
-                        <td>Mixed (Current)</td>
-                        <td id="mixed-cost">$0</td>
-                        <td id="mixed-latency">12ms</td>
+                <tbody>
+                    <tr>
+                        <td>Monthly Cost</td>
+                        <td id="cf-cost" class="cf-column">$0</td>
+                        <td id="mixed-cost" class="mixed-column">$0</td>
                     </tr>
-                    <tr data-provider="cf">
-                        <td>Pure Cloudflare</td>
-                        <td>$0</td>
-                        <td>20ms</td>
+                    <tr>
+                        <td>Latency (p50)</td>
+                        <td id="cf-latency" class="cf-column">20ms</td>
+                        <td id="mixed-latency" class="mixed-column">20ms</td>
                     </tr>
-                    <tr data-provider="gcp">
-                        <td>Pure GCP</td>
-                        <td>$15/mo</td>
-                        <td>100ms</td>
-                    </tr>
-                    <tr data-provider="aws">
-                        <td>Pure AWS</td>
-                        <td>$45/mo</td>
-                        <td>50ms</td>
-                    </tr>
-                    <tr data-provider="azure">
-                        <td>Pure Azure</td>
-                        <td>$70/mo</td>
-                        <td>100ms</td>
+                    <tr>
+                        <td>Edge Locations</td>
+                        <td id="cf-locations" class="cf-column">300+</td>
+                        <td id="mixed-locations" class="mixed-column">300+</td>
                     </tr>
                 </tbody>
             </table>
@@ -88,16 +103,6 @@
         </div>
     </div>
 
-    <div id="provider-selector">
-        <label for="provider-select">Provider:</label>
-        <select id="provider-select">
-            <option value="mixed" selected>Mixed (Best of All)</option>
-            <option value="cf">Cloudflare</option>
-            <option value="gcp">Google Cloud</option>
-            <option value="aws">AWS</option>
-            <option value="azure">Azure</option>
-        </select>
-    </div>
 
     <div id="loading-overlay">
         <div class="loading-content">
@@ -106,29 +111,72 @@
         </div>
     </div>
 
-    <div id="info-panel" class="hidden">
-        <button id="close-panel" aria-label="Close panel">&times;</button>
-        <h2 id="panel-title"></h2>
-        <div id="panel-provider-selector" class="hidden">
-            <label for="panel-provider-select">Switch Provider:</label>
-            <select id="panel-provider-select">
-                <option value="cf">Cloudflare</option>
-                <option value="gcp">Google Cloud</option>
-                <option value="aws">AWS</option>
-                <option value="azure">Azure</option>
-            </select>
-        </div>
-        <p id="panel-description"></p>
-        <div id="panel-reasons">
+    <!-- Left Column Info Panel (read-only, Cloudflare info) -->
+    <div id="info-panel-left" class="info-panel hidden">
+        <button class="close-panel" aria-label="Close panel">&times;</button>
+        <h2 class="panel-title"></h2>
+        <p class="panel-description"></p>
+        <div class="panel-reasons">
             <h3>Why This Choice</h3>
-            <ul id="panel-reasons-list"></ul>
+            <ul class="panel-reasons-list"></ul>
         </div>
-        <div id="panel-code">
-            <pre><code id="panel-code-content"></code></pre>
+        <div class="panel-code">
+            <pre><code class="panel-code-content"></code></pre>
         </div>
-        <div id="panel-links">
-            <a id="panel-docs-link" href="#" target="_blank" rel="noopener">Docs</a>
+        <div class="panel-links">
+            <a class="panel-docs-link" href="#" target="_blank" rel="noopener">Docs</a>
         </div>
+    </div>
+
+    <!-- Right Column Info Panel (editable, Mixed mode) -->
+    <div id="info-panel-right" class="info-panel hidden">
+        <button class="close-panel" aria-label="Close panel">&times;</button>
+        <h2 class="panel-title"></h2>
+
+        <!-- Alternatives dropdown (shows top 3 alternatives) -->
+        <div class="panel-alternatives hidden">
+            <label>Compare with:</label>
+            <select class="panel-alternatives-select">
+                <option value="">Select alternative...</option>
+            </select>
+            <div class="panel-compatibility-warning hidden">
+                <span class="warning-icon">⚠️</span>
+                <span class="warning-text"></span>
+            </div>
+        </div>
+
+        <p class="panel-description"></p>
+
+        <!-- Alternative details (shown when alternative selected) -->
+        <div class="panel-alt-details hidden">
+            <div class="alt-metrics">
+                <div class="alt-metric alt-metric-1"></div>
+                <div class="alt-metric alt-metric-2"></div>
+            </div>
+        </div>
+
+        <div class="panel-reasons">
+            <h3>Why This Choice</h3>
+            <ul class="panel-reasons-list"></ul>
+        </div>
+        <div class="panel-code">
+            <pre><code class="panel-code-content"></code></pre>
+        </div>
+        <div class="panel-links">
+            <a class="panel-docs-link" href="#" target="_blank" rel="noopener">Docs</a>
+        </div>
+
+        <!-- Affected components legend -->
+        <div class="affected-legend hidden">
+            <div class="legend-title" style="font-weight: 600; margin-bottom: 0.5rem; color: #fff;">Affected Components</div>
+            <div class="affected-list"></div>
+            <p style="margin-top: 0.5rem; font-size: 0.7rem; color: var(--text-secondary);">
+                Click glowing components on canvas to switch them
+            </p>
+        </div>
+
+        <!-- Apply button (switches to selected alternative) -->
+        <button class="btn-apply-alt hidden">Apply This Alternative</button>
     </div>
 
     <div id="controls">

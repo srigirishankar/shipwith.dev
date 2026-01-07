@@ -63,3 +63,36 @@ opt-level = 's'  # Size optimization for WASM
 
 - Three.js is accessed from Rust via JS interop, not native Rust bindings
 - Target: 60fps, <2s load time, works on Chrome/Firefox/Safari
+
+## Split-Screen Architecture (www/scene.js)
+
+The app uses a **split-screen comparison view** with two independent viewports:
+- **Left**: Pure Cloudflare stack (read-only reference)
+- **Right**: Mixed/customizable stack (user can swap components)
+
+**Key Constants:**
+- `LEFT_OFFSET = -5`, `RIGHT_OFFSET = 5` - X-axis positions for each column
+- `HEADER_HEIGHT_PX = 80` - Space reserved at top for column labels + dropdown
+- `currentViewShift` - Dynamic shift to leave room for info panels
+
+**Layer System (Three.js):**
+- Layer 1: Left side components (leftCamera sees only layer 1)
+- Layer 2: Right side components (rightCamera sees only layer 2)
+- Raycaster has both layers enabled for click detection
+
+**Key Patterns:**
+- `calculateCameraParams()` - Responsive camera positioning based on viewport
+- `createDebugBounds()` - Visual debugging (toggle with `DEBUG_BOUNDS` flag)
+- `leftColumnShift`/`rightColumnShift` - Animate components when info panel opens
+- `isReconstructing` flag - Prevents animate loop from conflicting with reconstruct animation
+
+**Info Panels:**
+- Two separate panels: `#info-panel-left` and `#info-panel-right`
+- Each side operates independently (clicking one doesn't close the other)
+- Uses class-based selectors (`.panel-title`, `.panel-description`, etc.)
+
+**UI Layout:**
+- Column labels at top (`#column-labels`) with provider dropdown in right label
+- Comparison table at bottom center (`#comparison-table`)
+- "How It Works" button at top center (`#controls`)
+- Viewport rendering excludes top 80px for header area
