@@ -373,6 +373,15 @@ body {
     padding-right: 1.5rem;
 }
 
+.info-panel .panel-subtitle {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 400;
+    font-style: italic;
+    color: var(--text-secondary);
+    margin-top: 0.15rem;
+}
+
 /* Alternatives dropdown */
 .info-panel .panel-alternatives {
     display: flex;

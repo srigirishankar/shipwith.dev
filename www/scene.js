@@ -71,7 +71,7 @@ const CLIENT_SWAPPABLE = ['wasm', 'threejs'];
 
 const ALTERNATIVES = {
     workers: {
-        current: { id: 'cf-workers', name: 'CF Workers', provider: 'cf', color: '#F6821F' },
+        current: { id: 'cf-workers', name: 'Cloudflare Workers', provider: 'cf', color: '#F6821F' },
         options: [
             {
                 id: 'vercel-edge',
@@ -115,7 +115,7 @@ const ALTERNATIVES = {
         ]
     },
     pages: {
-        current: { id: 'cf-pages', name: 'CF Pages', provider: 'cf', color: '#F6821F' },
+        current: { id: 'cf-pages', name: 'Cloudflare Pages', provider: 'cf', color: '#F6821F' },
         options: [
             {
                 id: 'vercel-hosting',
@@ -156,7 +156,7 @@ const ALTERNATIVES = {
         ]
     },
     kv: {
-        current: { id: 'cf-kv', name: 'CF KV', provider: 'cf', color: '#F6821F' },
+        current: { id: 'cf-kv', name: 'Cloudflare KV', provider: 'cf', color: '#F6821F' },
         options: [
             {
                 id: 'upstash-redis',
@@ -197,7 +197,7 @@ const ALTERNATIVES = {
         ]
     },
     d1: {
-        current: { id: 'cf-d1', name: 'CF D1', provider: 'cf', color: '#F6821F' },
+        current: { id: 'cf-d1', name: 'Cloudflare D1', provider: 'cf', color: '#F6821F' },
         options: [
             {
                 id: 'turso',
@@ -388,27 +388,27 @@ const PROVIDER_COLORS = {
 
 const PROVIDER_COMPONENTS = {
     cf: {
-        workers: { name: 'CF Workers', color: PROVIDER_COLORS.cf },
-        pages: { name: 'CF Pages', color: PROVIDER_COLORS.cf },
-        kv: { name: 'CF KV', color: PROVIDER_COLORS.cf },
-        d1: { name: 'CF D1', color: PROVIDER_COLORS.cf }
+        workers: { name: 'Cloudflare Workers', color: PROVIDER_COLORS.cf },
+        pages: { name: 'Cloudflare Pages', color: PROVIDER_COLORS.cf },
+        kv: { name: 'Cloudflare KV', color: PROVIDER_COLORS.cf },
+        d1: { name: 'Cloudflare D1', color: PROVIDER_COLORS.cf }
     },
     gcp: {
-        workers: { name: 'Cloud Run', color: PROVIDER_COLORS.gcp },
-        pages: { name: 'Firebase', color: PROVIDER_COLORS.gcp },
-        kv: { name: 'Firestore', color: PROVIDER_COLORS.gcp },
-        d1: { name: 'Cloud SQL', color: PROVIDER_COLORS.gcp }
+        workers: { name: 'GCP Cloud Run', color: PROVIDER_COLORS.gcp },
+        pages: { name: 'Firebase Hosting', color: PROVIDER_COLORS.gcp },
+        kv: { name: 'GCP Firestore', color: PROVIDER_COLORS.gcp },
+        d1: { name: 'GCP Cloud SQL', color: PROVIDER_COLORS.gcp }
     },
     aws: {
-        workers: { name: 'Lambda@Edge', color: PROVIDER_COLORS.aws },
-        pages: { name: 'Amplify', color: PROVIDER_COLORS.aws },
-        kv: { name: 'DynamoDB', color: PROVIDER_COLORS.aws },
-        d1: { name: 'Aurora', color: PROVIDER_COLORS.aws }
+        workers: { name: 'AWS Lambda@Edge', color: PROVIDER_COLORS.aws },
+        pages: { name: 'AWS Amplify', color: PROVIDER_COLORS.aws },
+        kv: { name: 'AWS DynamoDB', color: PROVIDER_COLORS.aws },
+        d1: { name: 'AWS Aurora', color: PROVIDER_COLORS.aws }
     },
     azure: {
-        workers: { name: 'Functions', color: PROVIDER_COLORS.azure },
-        pages: { name: 'Static Apps', color: PROVIDER_COLORS.azure },
-        kv: { name: 'Cosmos DB', color: PROVIDER_COLORS.azure },
+        workers: { name: 'Azure Functions', color: PROVIDER_COLORS.azure },
+        pages: { name: 'Azure Static Apps', color: PROVIDER_COLORS.azure },
+        kv: { name: 'Azure Cosmos DB', color: PROVIDER_COLORS.azure },
         d1: { name: 'Azure SQL', color: PROVIDER_COLORS.azure }
     }
 };
@@ -439,29 +439,31 @@ const NON_VENDOR_COLORS = {
 
 // Component definitions with colors and positions
 // pos = assembled (compact 3D), exploded = architecture diagram (flat 2D)
+// role = educational description of what the component does (line 1 on card)
+// name = vendor + product name (line 2 on card)
 const COMPONENTS = [
-    { id: 'user', name: 'User', color: NON_VENDOR_COLORS.user,
+    { id: 'user', name: 'End User', role: null, color: NON_VENDOR_COLORS.user,
       pos: { x: 0, y: 0.5, z: 4 },
       exploded: { x: 0, y: 6, z: 0 } },
-    { id: 'browser', name: 'Browser', color: NON_VENDOR_COLORS.browser,
+    { id: 'browser', name: 'Browser', role: 'Web Client', color: NON_VENDOR_COLORS.browser,
       pos: { x: 0, y: 0, z: 2 },
       exploded: { x: 0, y: 3.5, z: 0 } },
-    { id: 'workers', name: 'CF Workers', color: PROVIDER_COLORS.cf,
+    { id: 'workers', name: 'Cloudflare Workers', role: 'Edge Functions', color: PROVIDER_COLORS.cf,
       pos: { x: -1.2, y: 0, z: 0 },
       exploded: { x: -3.5, y: 1, z: 0 } },
-    { id: 'pages', name: 'CF Pages', color: PROVIDER_COLORS.cf,
+    { id: 'pages', name: 'Cloudflare Pages', role: 'Static Hosting', color: PROVIDER_COLORS.cf,
       pos: { x: 1.2, y: 0, z: 0 },
       exploded: { x: 3.5, y: 1, z: 0 } },
-    { id: 'wasm', name: 'Rust/WASM', color: NON_VENDOR_COLORS.wasm,
+    { id: 'wasm', name: 'Rust/WASM', role: 'Computation', color: NON_VENDOR_COLORS.wasm,
       pos: { x: -1.2, y: 0, z: -2 },
       exploded: { x: 3.5, y: -1.5, z: 0 } },
-    { id: 'threejs', name: 'Three.js', color: NON_VENDOR_COLORS.threejs,
+    { id: 'threejs', name: 'Three.js', role: '3D Graphics', color: NON_VENDOR_COLORS.threejs,
       pos: { x: 1.2, y: 0, z: -2 },
       exploded: { x: 3.5, y: -4, z: 0 } },
-    { id: 'kv', name: 'CF KV', color: PROVIDER_COLORS.cf,
+    { id: 'kv', name: 'Cloudflare KV', role: 'Key-Value Store', color: PROVIDER_COLORS.cf,
       pos: { x: -1.2, y: 0, z: -4 },
       exploded: { x: -5, y: -1.5, z: 0 } },
-    { id: 'd1', name: 'CF D1', color: PROVIDER_COLORS.cf,
+    { id: 'd1', name: 'Cloudflare D1', role: 'SQL Database', color: PROVIDER_COLORS.cf,
       pos: { x: 1.2, y: 0, z: -4 },
       exploded: { x: -2, y: -1.5, z: 0 } },
 ];
@@ -796,7 +798,8 @@ function drawComponentIcon(ctx, componentId, x, y, size) {
 }
 
 // Create a canvas texture with label and icon (Modern smoky glass effect)
-function createLabelTexture(name, color, componentId) {
+// Two-line layout: role (what it does) + name (vendor product)
+function createLabelTexture(name, color, componentId, role = null) {
     const canvas = document.createElement('canvas');
     canvas.width = 512;  // Higher resolution for sharper detail
     canvas.height = 512;
@@ -853,20 +856,26 @@ function createLabelTexture(name, color, componentId) {
     ctx.textBaseline = 'middle';
     ctx.fillText('i', 440, 442);
 
-    // === TEXT LABEL (white) ===
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 48px Inter, sans-serif';
+    // === TEXT LABELS (two-line layout) ===
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    // Handle multi-word names
-    const words = name.split(' ');
-    if (words.length > 1 && name.length > 10) {
+    if (role) {
+        // Two-line layout: Role (bold, white) + Name (light, gray)
+        // Line 1: Role - what it does (educational)
+        ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 40px Inter, sans-serif';
-        ctx.fillText(words[0], 256, 310);
-        ctx.fillText(words.slice(1).join(' '), 256, 360);
+        ctx.fillText(role, 256, 290);
+
+        // Line 2: Product name - vendor + product (informational)
+        ctx.fillStyle = '#aaaaaa';
+        ctx.font = '28px Inter, sans-serif';
+        ctx.fillText(name, 256, 345);
     } else {
-        ctx.fillText(name, 256, 330);
+        // Single line for components without a role (e.g., End User)
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 48px Inter, sans-serif';
+        ctx.fillText(name, 256, 320);
     }
 
     const texture = new THREE.CanvasTexture(canvas);
@@ -896,7 +905,7 @@ function createGlassCardMaterial(canvasTexture, color) {
 
 // Create component mesh with glass shader
 function createComponent(comp) {
-    const { texture, canvas } = createLabelTexture(comp.name, comp.color, comp.id);
+    const { texture, canvas } = createLabelTexture(comp.name, comp.color, comp.id, comp.role);
     const geometry = new THREE.PlaneGeometry(1.8, 1.8);
 
     // Use glass shader material for animated effects
@@ -908,6 +917,7 @@ function createComponent(comp) {
     mesh.userData = {
         id: comp.id,
         name: comp.name,
+        role: comp.role,
         color: comp.color,
         canvas: canvas,  // Store for texture updates
         basePosition: { ...comp.pos },
@@ -921,8 +931,9 @@ function createComponent(comp) {
 function createComponentWithOffset(comp, xOffset, overrideName, overrideColor) {
     const name = overrideName || comp.name;
     const color = overrideColor || comp.color;
+    const role = comp.role;  // Role stays the same (educational, not vendor-specific)
 
-    const { texture, canvas } = createLabelTexture(name, color, comp.id);
+    const { texture, canvas } = createLabelTexture(name, color, comp.id, role);
     const geometry = new THREE.PlaneGeometry(1.8, 1.8);
     const material = createGlassCardMaterial(texture, color);
 
@@ -933,6 +944,7 @@ function createComponentWithOffset(comp, xOffset, overrideName, overrideColor) {
     mesh.userData = {
         id: comp.id,
         name: name,
+        role: role,
         color: color,
         canvas: canvas,
         basePosition: { x: comp.pos.x + xOffset, y: comp.pos.y, z: comp.pos.z },
@@ -1281,9 +1293,16 @@ function showInfoPanel(componentId, options = {}) {
 
     // Get display name based on mode
     const displayName = side === 'left' ? comp.name : getComponentDisplayName(componentId);
+    const role = comp.role;
 
     // Update panel content using class selectors
-    panel.querySelector('.panel-title').textContent = displayName;
+    // Two-line title: Role (main) + Product name (subtitle)
+    const titleElement = panel.querySelector('.panel-title');
+    if (role) {
+        titleElement.innerHTML = `${role}<span class="panel-subtitle">${displayName}</span>`;
+    } else {
+        titleElement.textContent = displayName;
+    }
     panel.querySelector('.panel-description').textContent = info.description;
 
     // Populate alternatives dropdown (only for right/editable side)
@@ -1850,21 +1869,18 @@ function applyAlternativeToComponent(componentId, alternativeId, alternativeName
 
 // Update component texture with alternative name/color
 function updateComponentTextureWithAlternative(mesh, name, color) {
-    const canvas = document.createElement('canvas');
-    canvas.width = 512;
-    canvas.height = 512;
-    const ctx = canvas.getContext('2d');
+    const componentId = mesh.userData.id;
+    const role = getComponentRole(componentId);
 
-    // Use the existing drawComponentCard function style
-    drawComponentCard(ctx, name, color, 512);
+    // Use createLabelTexture for consistent two-line layout
+    const { texture } = createLabelTexture(name, color, componentId, role);
 
     // Update texture
     if (mesh.material.uniforms && mesh.material.uniforms.cardTexture) {
-        const newTexture = new THREE.CanvasTexture(canvas);
-        mesh.material.uniforms.cardTexture.value = newTexture;
+        mesh.material.uniforms.cardTexture.value = texture;
         mesh.material.uniforms.glowColor.value.set(color);
     } else if (mesh.material.map) {
-        mesh.material.map = new THREE.CanvasTexture(canvas);
+        mesh.material.map = texture;
         mesh.material.map.needsUpdate = true;
     }
 }
@@ -2039,6 +2055,12 @@ function onProviderChange(provider) {
     hideInfoPanel();
 }
 
+// Get role for a component ID
+function getComponentRole(componentId) {
+    const comp = COMPONENTS.find(c => c.id === componentId);
+    return comp ? comp.role : null;
+}
+
 // Update a single component's texture based on its provider (right side - editable)
 function updateSingleComponentTexture(componentId) {
     const mesh = rightComponents.find(m => m.userData.id === componentId);
@@ -2050,9 +2072,10 @@ function updateSingleComponentTexture(componentId) {
 
     // Get display name (with prefix in mixed mode)
     const displayName = getComponentDisplayName(componentId);
+    const role = getComponentRole(componentId);
 
     // Regenerate texture with icon
-    const { texture, canvas } = createLabelTexture(displayName, providerComp.color, componentId);
+    const { texture, canvas } = createLabelTexture(displayName, providerComp.color, componentId, role);
 
     // Update ShaderMaterial uniform
     mesh.material.uniforms.cardTexture.value = texture;
@@ -2132,7 +2155,7 @@ function loadStackFromStory(stack) {
     console.log('[Scene] Loaded stack:', stack);
 }
 
-// Get display name for component (with provider prefix in mixed mode)
+// Get display name for component (full vendor + product name)
 function getComponentDisplayName(componentId) {
     if (!SWAPPABLE_COMPONENTS.includes(componentId)) {
         // Non-swappable components keep original name
@@ -2144,11 +2167,7 @@ function getComponentDisplayName(componentId) {
     const providerComp = PROVIDER_COMPONENTS[provider]?.[componentId];
     if (!providerComp) return componentId;
 
-    if (isMixedMode) {
-        // Show prefix in mixed mode: "CF-Workers", "AWS-Lambda"
-        const prefixes = { cf: 'CF', gcp: 'GCP', aws: 'AWS', azure: 'Azure' };
-        return `${prefixes[provider]}-${providerComp.name}`;
-    }
+    // Names now include full vendor + product (e.g., "Cloudflare Workers", "AWS Lambda@Edge")
     return providerComp.name;
 }
 
@@ -2592,11 +2611,12 @@ function updateRightSideTextures() {
         const compId = mesh.userData.id;
         if (SWAPPABLE_COMPONENTS.includes(compId)) {
             const displayName = getComponentDisplayName(compId);
+            const role = getComponentRole(compId);
             const provider = componentProviders[compId] || 'cf';
             const color = PROVIDER_COLORS[provider] || mesh.userData.color;
 
             // Update texture with new name
-            const { texture } = createLabelTexture(displayName, color, compId);
+            const { texture } = createLabelTexture(displayName, color, compId, role);
             if (mesh.material.uniforms && mesh.material.uniforms.cardTexture) {
                 mesh.material.uniforms.cardTexture.value = texture;
                 mesh.material.uniforms.glowColor.value.set(color);
