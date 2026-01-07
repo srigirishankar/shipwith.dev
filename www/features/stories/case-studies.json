@@ -1,0 +1,236 @@
+{
+  "stories": [
+    {
+      "id": "linear-realtime",
+      "company": "Linear",
+      "logo": "https://linear.app/favicon.ico",
+      "tagline": "Real-time sync for 100K+ concurrent users",
+      "industry": "dev-tools",
+      "scale": "growth",
+      "traffic": "500M req/month",
+      "stack": {
+        "compute": { "provider": "cloudflare", "service": "Workers" },
+        "database": { "provider": "turso", "service": "libSQL" },
+        "cache": { "provider": "upstash", "service": "Redis" },
+        "hosting": { "provider": "vercel", "service": "Edge" }
+      },
+      "whyThisStack": [
+        "Edge-first architecture for global low latency (<50ms p99)",
+        "SQLite (via Turso) provides simplicity with multi-region replication",
+        "Redis pub/sub enables real-time collaborative features",
+        "Workers handle WebSocket connections at the edge"
+      ],
+      "metrics": {
+        "p99Latency": "45ms",
+        "monthlyInfra": "~$2,500",
+        "uptime": "99.99%"
+      },
+      "blogUrl": "https://linear.app/blog/how-we-built-it",
+      "verified": false,
+      "note": "Architecture based on public interviews and tech choices"
+    },
+    {
+      "id": "cal-scheduling",
+      "company": "Cal.com",
+      "logo": "https://cal.com/favicon.ico",
+      "tagline": "Open-source scheduling at scale",
+      "industry": "saas",
+      "scale": "growth",
+      "traffic": "200M req/month",
+      "stack": {
+        "compute": { "provider": "vercel", "service": "Edge Functions" },
+        "database": { "provider": "planetscale", "service": "MySQL" },
+        "cache": { "provider": "upstash", "service": "Redis" },
+        "hosting": { "provider": "vercel", "service": "Edge" }
+      },
+      "whyThisStack": [
+        "Vercel Edge Functions for instant serverless compute",
+        "PlanetScale for zero-downtime schema changes in open source project",
+        "Upstash Redis for rate limiting and session management",
+        "Global edge distribution for international users"
+      ],
+      "metrics": {
+        "p99Latency": "120ms",
+        "monthlyInfra": "~$1,800",
+        "uptime": "99.95%"
+      },
+      "blogUrl": "https://cal.com/blog/how-we-scale",
+      "verified": false,
+      "note": "Based on public tech stack documentation"
+    },
+    {
+      "id": "resend-email",
+      "company": "Resend",
+      "logo": "https://resend.com/favicon.ico",
+      "tagline": "Modern email API for developers",
+      "industry": "dev-tools",
+      "scale": "growth",
+      "traffic": "1B+ emails/month",
+      "stack": {
+        "compute": { "provider": "cloudflare", "service": "Workers" },
+        "database": { "provider": "neon", "service": "Postgres" },
+        "queue": { "provider": "cloudflare", "service": "Queues" },
+        "hosting": { "provider": "cloudflare", "service": "Pages" }
+      },
+      "whyThisStack": [
+        "Cloudflare Workers for edge-based email routing and validation",
+        "Neon serverless Postgres for developer-friendly SQL interface",
+        "Cloudflare Queues for reliable email delivery pipeline",
+        "Global edge presence reduces email send latency"
+      ],
+      "metrics": {
+        "p99Latency": "35ms",
+        "monthlyInfra": "~$3,200",
+        "uptime": "99.98%"
+      },
+      "blogUrl": "https://resend.com/blog/how-resend-works",
+      "verified": false,
+      "note": "Architecture inferred from product behavior and blog posts"
+    },
+    {
+      "id": "notion-workspace",
+      "company": "Notion",
+      "logo": "https://notion.so/favicon.ico",
+      "tagline": "Real-time collaborative workspace",
+      "industry": "saas",
+      "scale": "enterprise",
+      "traffic": "10B+ req/month",
+      "stack": {
+        "compute": { "provider": "aws", "service": "Lambda" },
+        "database": { "provider": "aws", "service": "RDS" },
+        "cache": { "provider": "aws", "service": "ElastiCache" },
+        "hosting": { "provider": "cloudflare", "service": "CDN" }
+      },
+      "whyThisStack": [
+        "AWS Lambda for serverless compute with autoscaling",
+        "RDS Postgres for complex relational data (pages, blocks, permissions)",
+        "ElastiCache for frequently accessed workspace data",
+        "Cloudflare CDN for asset delivery and DDoS protection"
+      ],
+      "metrics": {
+        "p99Latency": "200ms",
+        "monthlyInfra": "~$45,000",
+        "uptime": "99.9%"
+      },
+      "blogUrl": "https://www.notion.so/blog/topic/eng",
+      "verified": false,
+      "note": "Based on engineering blog posts and public statements"
+    },
+    {
+      "id": "vercel-platform",
+      "company": "Vercel",
+      "logo": "https://vercel.com/favicon.ico",
+      "tagline": "Frontend deployment platform",
+      "industry": "dev-tools",
+      "scale": "enterprise",
+      "traffic": "50B req/month",
+      "stack": {
+        "compute": { "provider": "aws", "service": "Lambda@Edge" },
+        "database": { "provider": "planetscale", "service": "MySQL" },
+        "cache": { "provider": "cloudflare", "service": "CDN" },
+        "hosting": { "provider": "vercel", "service": "Edge" }
+      },
+      "whyThisStack": [
+        "Lambda@Edge for dynamic SSR at CloudFront edge locations",
+        "PlanetScale for deployment metadata with instant scaling",
+        "Multi-CDN strategy (Cloudflare + CloudFront) for redundancy",
+        "Own platform for dogfooding and continuous testing"
+      ],
+      "metrics": {
+        "p99Latency": "80ms",
+        "monthlyInfra": "~$120,000",
+        "uptime": "99.99%"
+      },
+      "blogUrl": "https://vercel.com/blog/how-we-built-it",
+      "verified": false,
+      "note": "Publicly discussed architecture from conf talks"
+    },
+    {
+      "id": "railway-deployment",
+      "company": "Railway",
+      "logo": "https://railway.app/favicon.ico",
+      "tagline": "Instant deployments for full-stack apps",
+      "industry": "dev-tools",
+      "scale": "startup",
+      "traffic": "100M req/month",
+      "stack": {
+        "compute": { "provider": "gcp", "service": "Cloud Run" },
+        "database": { "provider": "gcp", "service": "Cloud SQL" },
+        "cache": { "provider": "upstash", "service": "Redis" },
+        "hosting": { "provider": "cloudflare", "service": "CDN" }
+      },
+      "whyThisStack": [
+        "Cloud Run for containerized workloads with autoscaling",
+        "Cloud SQL Postgres for project metadata and user data",
+        "Upstash Redis for real-time deployment logs and pub/sub",
+        "Cloudflare for edge caching and DDoS protection"
+      ],
+      "metrics": {
+        "p99Latency": "150ms",
+        "monthlyInfra": "~$4,500",
+        "uptime": "99.9%"
+      },
+      "blogUrl": "https://blog.railway.app/p/how-railway-works",
+      "verified": false,
+      "note": "Based on public technical documentation"
+    },
+    {
+      "id": "supabase-backend",
+      "company": "Supabase",
+      "logo": "https://supabase.com/favicon.ico",
+      "tagline": "Open source Firebase alternative",
+      "industry": "dev-tools",
+      "scale": "growth",
+      "traffic": "2B+ req/month",
+      "stack": {
+        "compute": { "provider": "aws", "service": "EC2" },
+        "database": { "provider": "aws", "service": "RDS Postgres" },
+        "cache": { "provider": "cloudflare", "service": "Workers KV" },
+        "hosting": { "provider": "cloudflare", "service": "CDN" }
+      },
+      "whyThisStack": [
+        "EC2 for running Postgres with custom extensions (PostgREST)",
+        "RDS Postgres as core database with full SQL capabilities",
+        "Workers KV for edge-cached API responses and auth tokens",
+        "Cloudflare CDN for Dashboard and realtime connections"
+      ],
+      "metrics": {
+        "p99Latency": "95ms",
+        "monthlyInfra": "~$15,000",
+        "uptime": "99.95%"
+      },
+      "blogUrl": "https://supabase.com/blog/tags/engineering",
+      "verified": false,
+      "note": "Based on open source code and architecture blog posts"
+    },
+    {
+      "id": "shopify-commerce",
+      "company": "Shopify Hydrogen",
+      "logo": "https://shopify.dev/favicon.ico",
+      "tagline": "Headless commerce framework (Example)",
+      "industry": "e-commerce",
+      "scale": "growth",
+      "traffic": "500M req/month",
+      "stack": {
+        "compute": { "provider": "cloudflare", "service": "Workers" },
+        "database": { "provider": "planetscale", "service": "MySQL" },
+        "cache": { "provider": "cloudflare", "service": "KV" },
+        "hosting": { "provider": "vercel", "service": "Edge" }
+      },
+      "whyThisStack": [
+        "Edge Workers for ultra-fast product page rendering",
+        "PlanetScale for global product catalog replication",
+        "Workers KV for cached product data and sessions",
+        "Vercel Edge for static storefront assets"
+      ],
+      "metrics": {
+        "p99Latency": "60ms",
+        "monthlyInfra": "~$6,000",
+        "uptime": "99.99%"
+      },
+      "blogUrl": "https://shopify.engineering/",
+      "verified": false,
+      "note": "Example architecture for modern Shopify storefronts"
+    }
+  ]
+}

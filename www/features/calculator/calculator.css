@@ -1,0 +1,384 @@
+/* Calculator Feature Styles */
+/* Scoped to calculator feature only */
+
+/* Calculator panel content */
+[data-feature="calculator"] .calculator-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+/* Region checkboxes */
+[data-feature="calculator"] .region-checkboxes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-sm);
+}
+
+[data-feature="calculator"] .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-sm);
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-size: 0.875rem;
+}
+
+[data-feature="calculator"] .checkbox-label:hover {
+  background: rgba(0, 0, 0, 0.3);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+[data-feature="calculator"] .checkbox-label input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--color-accent);
+}
+
+/* Results card */
+[data-feature="calculator"] .results-card {
+  margin-top: var(--space-md);
+}
+
+[data-feature="calculator"] .results-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-md);
+}
+
+[data-feature="calculator"] .results-header h4 {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Cost breakdown */
+[data-feature="calculator"] .cost-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+}
+
+[data-feature="calculator"] .cost-item {
+  padding: var(--space-sm) 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+[data-feature="calculator"] .cost-item:last-child {
+  border-bottom: none;
+}
+
+[data-feature="calculator"] .cost-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+[data-feature="calculator"] .cost-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+[data-feature="calculator"] .cost-value {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Total cost display */
+[data-feature="calculator"] .total-cost {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-md);
+  background: rgba(246, 130, 31, 0.1);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-md);
+}
+
+[data-feature="calculator"] .total-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+[data-feature="calculator"] .total-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--color-accent);
+}
+
+/* Latency estimate */
+[data-feature="calculator"] .latency-estimate {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-sm) var(--space-md);
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: var(--radius-md);
+}
+
+[data-feature="calculator"] .latency-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+[data-feature="calculator"] .latency-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* Action buttons */
+[data-feature="calculator"] .action-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+[data-feature="calculator"] .action-buttons .btn {
+  width: 100%;
+}
+
+/* Verification footer */
+[data-feature="calculator"] .verification-footer {
+  text-align: center;
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--glass-border);
+}
+
+/* Terraform modal */
+.terraform-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: var(--space-lg);
+}
+
+.terraform-modal-content {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  max-width: 700px;
+  width: 100%;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.terraform-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-lg);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.terraform-modal-header h3 {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.terraform-code {
+  flex: 1;
+  overflow: auto;
+  padding: var(--space-lg);
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.terraform-code pre {
+  margin: 0;
+  font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.terraform-code code {
+  font-family: inherit;
+}
+
+.terraform-modal-footer {
+  display: flex;
+  gap: var(--space-sm);
+  padding: var(--space-lg);
+  border-top: 1px solid var(--glass-border);
+}
+
+.terraform-modal-footer .btn {
+  flex: 1;
+}
+
+/* Toast notification */
+.toast-notification {
+  position: fixed;
+  bottom: var(--space-xl);
+  left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  padding: var(--space-md) var(--space-lg);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  font-weight: 500;
+  z-index: 10000;
+  transition: transform var(--transition-normal);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.toast-notification.visible {
+  transform: translateX(-50%) translateY(0);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .terraform-modal-content {
+    max-width: 100%;
+    max-height: 90vh;
+  }
+
+  .terraform-code {
+    font-size: 0.625rem;
+  }
+
+  [data-feature="calculator"] .total-value {
+    font-size: 1.5rem;
+  }
+
+  [data-feature="calculator"] .latency-value {
+    font-size: 1rem;
+  }
+}
+
+/* Syntax highlighting for Terraform code (basic) */
+.terraform-code pre code {
+  color: #e5e7eb;
+}
+
+.terraform-code pre code::before {
+  content: '';
+}
+
+/* Empty state */
+[data-feature="calculator"] .cost-breakdown:empty::before {
+  content: 'Calculating...';
+  display: block;
+  text-align: center;
+  padding: var(--space-lg);
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+/* Loading skeleton for cost items */
+[data-feature="calculator"] .cost-item.loading {
+  opacity: 0.5;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.8; }
+}
+
+/* Improved scrollbar for modal */
+.terraform-code::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.terraform-code::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+.terraform-code::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+.terraform-code::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Source link styling */
+[data-feature="calculator"] .source-link {
+  font-size: 0.625rem;
+  opacity: 0.7;
+  transition: opacity var(--transition-fast);
+}
+
+[data-feature="calculator"] .source-link:hover {
+  opacity: 1;
+}
+
+/* Provider badge in results */
+[data-feature="calculator"] .results-header .provider-badge {
+  font-size: 0.625rem;
+  padding: 4px 8px;
+}
+
+/* Enhanced focus states for accessibility */
+[data-feature="calculator"] input[type="checkbox"]:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+[data-feature="calculator"] .range-slider:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* Smooth transitions for value changes */
+[data-feature="calculator"] .total-value,
+[data-feature="calculator"] .latency-value,
+[data-feature="calculator"] .cost-value {
+  transition: color var(--transition-fast);
+}
+
+/* Print styles */
+@media print {
+  .terraform-modal {
+    position: static;
+    background: white;
+  }
+
+  .terraform-modal-content {
+    border: 1px solid #000;
+    box-shadow: none;
+  }
+
+  .terraform-code {
+    background: white;
+    color: black;
+  }
+}

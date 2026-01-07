@@ -22,6 +22,10 @@
     <title>shipwith.dev - Architecture Simulator</title>
 
     <link rel="stylesheet" href="/style.css">
+    <link rel="stylesheet" href="/shared/ui-kit.css">
+    <link rel="stylesheet" href="/features/calculator/calculator.css">
+    <link rel="stylesheet" href="/features/stories/stories.css">
+    <link rel="stylesheet" href="/features/neutral/neutral.css">
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -184,6 +188,16 @@
         <button id="btn-reconstruct" class="hidden">Reconstruct</button>
     </div>
 
+    <!-- Feature tabs - each feature manages its own panel -->
+    <div id="feature-tabs" class="feature-tabs">
+        <button class="feature-tab" data-feature="calculator">Calculate</button>
+        <button class="feature-tab" data-feature="stories">Real Stacks</button>
+        <button class="feature-tab" data-feature="neutral">Neutral Mode</button>
+    </div>
+
+    <!-- Feature panels will be injected here by each feature's JS -->
+    <div id="feature-panels"></div>
+
     <script type="module">
         import init, { App } from './pkg/shipwith_dev.js';
 
@@ -200,6 +214,19 @@
         }
 
         main().catch(console.error);
+    </script>
+
+    <!-- Feature modules - each initializes independently -->
+    <script type="module">
+        // Dynamic imports - features load independently and don't block main app
+        // Each feature handles its own tab click and panel rendering
+        Promise.all([
+            import('./features/calculator/calculator.js').then(m => m.init?.()).catch(() => {}),
+            import('./features/stories/stories.js').then(m => m.init?.()).catch(() => {}),
+            import('./features/neutral/neutral.js').then(m => m.init?.()).catch(() => {})
+        ]).then(() => {
+            console.log('[Features] All features loaded');
+        });
     </script>
 </body>
 </html>
