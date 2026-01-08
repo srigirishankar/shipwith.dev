@@ -96,3 +96,41 @@ The app uses a **split-screen comparison view** with two independent viewports:
 - Comparison table at bottom center (`#comparison-table`)
 - "How It Works" button at top center (`#controls`)
 - Viewport rendering excludes top 80px for header area
+
+## Component Labeling System (Two-Line Layout)
+
+Components use a **two-line educational layout**:
+- **Line 1 (Role)**: What it does - bold, white (e.g., "Edge Functions", "Key-Value Store")
+- **Line 2 (Product)**: Vendor + product name - gray, italic (e.g., "Cloudflare Workers")
+
+**Key data structures:**
+- `COMPONENTS[]` - Each has `id`, `name`, `role`, `color`, `pos`, `exploded`
+- `PROVIDER_COMPONENTS{}` - Full vendor+product names per provider (cf, aws, gcp, azure)
+- `getComponentRole(componentId)` - Helper to get role from COMPONENTS array
+
+**Rendering:**
+- `createLabelTexture(name, color, componentId, role)` - Creates 512x512 canvas texture
+- Two-line layout rendered at y=290 (role) and y=345 (product name)
+
+## Alternatives System (www/scene.js)
+
+**Database:**
+- `ALTERNATIVES{}` - Top 3 alternatives per component with metrics, docs, warnings
+- Entries for: `workers`, `pages`, `kv`, `d1`, `wasm`, `threejs`
+
+**Key functions:**
+- `populateAlternativesDropdown(panel, componentId, editable)` - Populates dropdown from ALTERNATIVES
+- `showAlternativeDetails(panel, componentId, alternativeId)` - Shows metrics & warnings
+- `applyAlternativeToComponent(componentId, alternativeId, alternativeName)` - Actually switches component
+- `updateComponentTextureWithAlternative(mesh, name, color)` - Updates 3D texture
+
+**Flow:**
+1. User clicks component on right side → `showInfoPanel()` with editable=true
+2. Dropdown populated from `ALTERNATIVES[componentId].options`
+3. User selects alternative → `showAlternativeDetails()` shows comparison
+4. User clicks "Apply" → `applyAlternativeToComponent()` switches texture/color
+
+**State tracking:**
+- `selectedAlternatives{}` - Tracks which alternative is selected per component
+- `componentProviders{}` - Tracks which provider each component uses
+- `affectedComponents` - Set of components affected by current selection
