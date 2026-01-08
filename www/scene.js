@@ -1433,7 +1433,10 @@ function populateAlternativesDropdown(panel, componentId, editable = true) {
         applyBtn.onclick = () => {
             const alternativeId = alternativesSelect.value;
             if (alternativeId) {
-                applyAlternative(componentId, alternativeId);
+                const alternative = ALTERNATIVES[componentId]?.options.find(a => a.id === alternativeId);
+                if (alternative) {
+                    applyAlternativeToComponent(componentId, alternativeId, alternative.name);
+                }
                 hideInfoPanel('right');
             }
         };
