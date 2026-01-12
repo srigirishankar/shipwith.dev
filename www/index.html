@@ -56,6 +56,11 @@
                 <span class="stack-icon">⚙️</span>
                 <span class="stack-name">Custom</span>
             </button>
+            <div class="header-divider"></div>
+            <div id="controls" class="header-controls">
+                <button id="btn-deconstruct" class="primary">How It Works</button>
+                <button id="btn-reconstruct" class="hidden">Reconstruct</button>
+            </div>
         </div>
 
         <!-- Live Summary Bar - Shows diff from baseline -->
@@ -164,6 +169,9 @@
             <p>Loading WASM...</p>
         </div>
     </div>
+
+    <!-- Backdrop for Bottom Sheet (click outside to close) -->
+    <div id="sheet-backdrop" class="sheet-backdrop"></div>
 
     <!-- Bottom Sheet - Unified Component Info Panel (Single Pane Mode) -->
     <div id="bottom-sheet" class="bottom-sheet hidden">
@@ -299,10 +307,6 @@
         <button class="btn-apply-alt hidden">Apply This Alternative</button>
     </div>
 
-    <div id="controls">
-        <button id="btn-deconstruct" class="primary">How It Works</button>
-        <button id="btn-reconstruct" class="hidden">Reconstruct</button>
-    </div>
 
     <!-- Feature tabs - each feature manages its own panel -->
     <div id="feature-tabs" class="feature-tabs">
