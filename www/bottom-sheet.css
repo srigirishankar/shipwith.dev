@@ -1,0 +1,451 @@
+/**
+ * Bottom Sheet Component
+ * Mobile-first component info panel that slides up from the bottom
+ */
+
+/* ============================================
+   BASE BOTTOM SHEET STYLES
+   ============================================ */
+
+.bottom-sheet {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    max-height: 80vh;
+    background: var(--panel-bg, rgba(29, 29, 29, 0.98));
+    border-top-left-radius: 16px;
+    border-top-right-radius: 16px;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+    z-index: var(--z-sheets, 40);
+    transform: translateY(100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.bottom-sheet.visible {
+    transform: translateY(0);
+}
+
+.bottom-sheet.hidden {
+    transform: translateY(100%);
+    pointer-events: none;
+}
+
+/* ============================================
+   BACKDROP (click outside to close)
+   ============================================ */
+
+.sheet-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: var(--z-backdrop, 35);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+.sheet-backdrop.visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* Drag Handle */
+.sheet-handle {
+    display: flex;
+    justify-content: center;
+    padding: 12px 0 8px;
+    cursor: grab;
+    touch-action: none;
+}
+
+.sheet-handle:active {
+    cursor: grabbing;
+}
+
+.handle-bar {
+    width: 40px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 2px;
+    transition: background 0.2s;
+}
+
+.sheet-handle:hover .handle-bar {
+    background: rgba(255, 255, 255, 0.5);
+}
+
+/* Sheet Content */
+.sheet-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 1.25rem 1.5rem;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Close Button */
+.close-sheet {
+    position: absolute;
+    top: 12px;
+    right: 16px;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    border-radius: 50%;
+    color: var(--text-secondary, #a0a0a0);
+    font-size: 1.25rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.close-sheet:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: var(--text-primary, #ffffff);
+}
+
+/* ============================================
+   SHEET HEADER
+   ============================================ */
+
+.sheet-header {
+    margin-bottom: 1rem;
+    padding-right: 40px; /* Space for close button */
+}
+
+.sheet-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary, #ffffff);
+    margin: 0 0 0.25rem;
+}
+
+.sheet-role {
+    font-size: 0.85rem;
+    color: var(--text-secondary, #a0a0a0);
+    font-style: italic;
+}
+
+/* ============================================
+   INLINE COMPARISON
+   ============================================ */
+
+.comparison-inline {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+
+.comparison-current,
+.comparison-alternative {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.comparison-arrow {
+    color: var(--text-secondary, #a0a0a0);
+    font-size: 1.25rem;
+    flex-shrink: 0;
+}
+
+.comp-label {
+    font-size: 0.7rem;
+    color: var(--text-secondary, #a0a0a0);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.comp-name {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-primary, #ffffff);
+}
+
+.alternatives-select {
+    width: 100%;
+    padding: 0.4rem 0.5rem;
+    background: rgba(64, 64, 64, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    color: var(--text-primary, #ffffff);
+    font-size: 0.85rem;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.alternatives-select:focus {
+    outline: none;
+    border-color: var(--cf-orange, #F6821F);
+}
+
+/* ============================================
+   METRICS COMPARISON
+   ============================================ */
+
+.metrics-comparison {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+
+.metrics-comparison.hidden {
+    display: none;
+}
+
+.metric-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+}
+
+.metric-name {
+    width: 70px;
+    color: var(--text-secondary, #a0a0a0);
+    flex-shrink: 0;
+}
+
+.metric-current {
+    color: var(--text-primary, #ffffff);
+    font-weight: 500;
+}
+
+.metric-arrow {
+    color: var(--text-secondary, #a0a0a0);
+    font-size: 0.75rem;
+}
+
+.metric-new {
+    color: var(--text-primary, #ffffff);
+    font-weight: 600;
+}
+
+.metric-diff-badge {
+    margin-left: auto;
+}
+
+/* ============================================
+   WARNING
+   ============================================ */
+
+.sheet-warning {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    background: rgba(255, 193, 7, 0.1);
+    border: 1px solid rgba(255, 193, 7, 0.3);
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+
+.sheet-warning.hidden {
+    display: none;
+}
+
+.sheet-warning .warning-icon {
+    flex-shrink: 0;
+}
+
+.sheet-warning .warning-text {
+    font-size: 0.8rem;
+    color: #ffc107;
+    line-height: 1.4;
+}
+
+/* ============================================
+   DESCRIPTION & REASONS
+   ============================================ */
+
+.sheet-description {
+    font-size: 0.9rem;
+    color: var(--text-secondary, #a0a0a0);
+    line-height: 1.5;
+    margin-bottom: 1rem;
+}
+
+.sheet-reasons h3 {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--cf-orange, #F6821F);
+    margin-bottom: 0.5rem;
+}
+
+.reasons-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 1rem;
+}
+
+.reasons-list li {
+    padding: 0.25rem 0;
+    padding-left: 1rem;
+    position: relative;
+    color: var(--text-secondary, #a0a0a0);
+    font-size: 0.85rem;
+    line-height: 1.4;
+}
+
+.reasons-list li::before {
+    content: "•";
+    position: absolute;
+    left: 0;
+    color: var(--cf-orange, #F6821F);
+}
+
+/* ============================================
+   ACTIONS
+   ============================================ */
+
+.sheet-actions {
+    display: flex;
+    gap: 0.75rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.btn-apply {
+    flex: 1;
+    padding: 0.75rem 1rem;
+    background: linear-gradient(135deg, #10B981, #059669);
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-apply:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.btn-apply.hidden {
+    display: none;
+}
+
+.btn-docs {
+    padding: 0.75rem 1rem;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    color: var(--text-primary, #ffffff);
+    font-size: 0.85rem;
+    text-decoration: none;
+    transition: all 0.2s;
+}
+
+.btn-docs:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* ============================================
+   DESKTOP LAYOUT
+   On larger screens, show as a side panel instead
+   ============================================ */
+
+@media (min-width: 769px) {
+    .bottom-sheet {
+        /* On desktop, position as right-side panel */
+        top: var(--header-height, 70px);
+        bottom: var(--footer-height, 60px);
+        left: auto;
+        right: 0;
+        width: 360px;
+        max-height: none;
+        border-radius: 12px 0 0 12px;
+        transform: translateX(100%);
+    }
+
+    .bottom-sheet.visible {
+        transform: translateX(0);
+    }
+
+    .bottom-sheet.hidden {
+        transform: translateX(100%);
+    }
+
+    .sheet-handle {
+        display: none; /* No drag handle on desktop */
+    }
+
+    .sheet-content {
+        padding-top: 1rem;
+    }
+}
+
+/* ============================================
+   MOBILE SPECIFIC
+   ============================================ */
+
+@media (max-width: 768px) {
+    .bottom-sheet {
+        max-height: 90vh;
+    }
+
+    .sheet-content {
+        padding-bottom: 80px; /* Extra padding for safe area */
+    }
+
+    /* Snap points for drag */
+    .bottom-sheet[data-snap="peek"] {
+        max-height: 30vh;
+    }
+
+    .bottom-sheet[data-snap="half"] {
+        max-height: 50vh;
+    }
+
+    .bottom-sheet[data-snap="full"] {
+        max-height: 90vh;
+    }
+
+    .comparison-inline {
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .comparison-arrow {
+        transform: rotate(90deg);
+    }
+
+    .sheet-actions {
+        flex-direction: column;
+    }
+
+    .btn-apply,
+    .btn-docs {
+        width: 100%;
+        text-align: center;
+    }
+}
+
+/* ============================================
+   REDUCED MOTION
+   ============================================ */
+
+@media (prefers-reduced-motion: reduce) {
+    .bottom-sheet {
+        transition: none;
+    }
+}

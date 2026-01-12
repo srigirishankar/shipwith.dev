@@ -22,6 +22,7 @@
     <title>shipwith.dev - Architecture Simulator</title>
 
     <link rel="stylesheet" href="/style.css">
+    <link rel="stylesheet" href="/bottom-sheet.css">
     <link rel="stylesheet" href="/shared/ui-kit.css">
     <link rel="stylesheet" href="/features/calculator/calculator.css">
     <link rel="stylesheet" href="/features/stories/stories.css">
@@ -33,8 +34,62 @@
 </head>
 <body>
     <div id="app-container">
-        <!-- Column Labels for Split View -->
-        <div id="column-labels">
+        <!-- Stack Toggle - Single Pane Mode -->
+        <div id="stack-toggle" class="stack-toggle">
+            <button class="stack-btn active" data-stack="cloudflare">
+                <span class="stack-icon">☁️</span>
+                <span class="stack-name">Cloudflare</span>
+            </button>
+            <button class="stack-btn" data-stack="aws">
+                <span class="stack-icon">🔶</span>
+                <span class="stack-name">AWS</span>
+            </button>
+            <button class="stack-btn" data-stack="gcp">
+                <span class="stack-icon">🔷</span>
+                <span class="stack-name">GCP</span>
+            </button>
+            <button class="stack-btn" data-stack="azure">
+                <span class="stack-icon">🔵</span>
+                <span class="stack-name">Azure</span>
+            </button>
+            <button class="stack-btn" data-stack="custom">
+                <span class="stack-icon">⚙️</span>
+                <span class="stack-name">Custom</span>
+            </button>
+            <div class="header-divider"></div>
+            <div id="controls" class="header-controls">
+                <button id="btn-deconstruct" class="primary">How It Works</button>
+                <button id="btn-reconstruct" class="hidden">Reconstruct</button>
+            </div>
+        </div>
+
+        <!-- Live Summary Bar - Shows diff from baseline -->
+        <div id="summary-bar" class="summary-bar">
+            <div class="summary-baseline">
+                <span class="summary-label">vs Cloudflare:</span>
+            </div>
+            <div class="summary-metrics">
+                <div class="summary-metric" id="summary-cost">
+                    <span class="metric-label">Cost</span>
+                    <span class="metric-value">$0/mo</span>
+                    <span class="metric-diff cost-diff"></span>
+                </div>
+                <div class="summary-metric" id="summary-latency">
+                    <span class="metric-label">Latency</span>
+                    <span class="metric-value">20ms</span>
+                    <span class="metric-diff"></span>
+                </div>
+                <div class="summary-metric" id="summary-locations">
+                    <span class="metric-label">Edge PoPs</span>
+                    <span class="metric-value">300+</span>
+                    <span class="metric-diff"></span>
+                </div>
+            </div>
+            <button class="summary-reset hidden" id="btn-reset-stack">Reset</button>
+        </div>
+
+        <!-- Legacy: Column Labels for Split View (hidden in single-pane mode) -->
+        <div id="column-labels" class="split-view-only hidden">
             <div class="column-label left">
                 <span class="label-icon">☁️</span>
                 <span class="label-text">CLOUDFLARE NATIVE</span>
@@ -54,11 +109,11 @@
             </div>
         </div>
 
-        <!-- Center Divider -->
-        <div id="center-divider"></div>
+        <!-- Legacy: Center Divider (hidden in single-pane mode) -->
+        <div id="center-divider" class="split-view-only"></div>
 
-        <!-- Comparison Table (Bottom) -->
-        <div id="comparison-table">
+        <!-- Legacy: Comparison Table (hidden in single-pane mode) -->
+        <div id="comparison-table" class="split-view-only hidden">
             <table>
                 <thead>
                     <tr>
@@ -115,8 +170,77 @@
         </div>
     </div>
 
-    <!-- Left Column Info Panel (read-only, Cloudflare info) -->
-    <div id="info-panel-left" class="info-panel hidden">
+    <!-- Backdrop for Bottom Sheet (click outside to close) -->
+    <div id="sheet-backdrop" class="sheet-backdrop"></div>
+
+    <!-- Bottom Sheet - Unified Component Info Panel (Single Pane Mode) -->
+    <div id="bottom-sheet" class="bottom-sheet hidden">
+        <div class="sheet-handle" aria-label="Drag to resize">
+            <div class="handle-bar"></div>
+        </div>
+        <div class="sheet-content">
+            <button class="close-sheet" aria-label="Close panel">&times;</button>
+
+            <div class="sheet-header">
+                <h2 class="sheet-title"></h2>
+                <span class="sheet-role"></span>
+            </div>
+
+            <!-- Inline Comparison - Current vs Alternative -->
+            <div class="comparison-inline">
+                <div class="comparison-current">
+                    <span class="comp-label">Current</span>
+                    <span class="comp-name"></span>
+                </div>
+                <div class="comparison-arrow">→</div>
+                <div class="comparison-alternative">
+                    <label class="comp-label">Switch to:</label>
+                    <select class="alternatives-select">
+                        <option value="">Select alternative...</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Metrics Comparison (shown when alternative selected) -->
+            <div class="metrics-comparison hidden">
+                <div class="metric-row">
+                    <span class="metric-name">Cost</span>
+                    <span class="metric-current"></span>
+                    <span class="metric-arrow">→</span>
+                    <span class="metric-new"></span>
+                    <span class="metric-diff-badge diff-badge"></span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-name">Latency</span>
+                    <span class="metric-current"></span>
+                    <span class="metric-arrow">→</span>
+                    <span class="metric-new"></span>
+                    <span class="metric-diff-badge diff-badge"></span>
+                </div>
+            </div>
+
+            <!-- Compatibility Warning -->
+            <div class="sheet-warning hidden">
+                <span class="warning-icon">⚠️</span>
+                <span class="warning-text"></span>
+            </div>
+
+            <p class="sheet-description"></p>
+
+            <div class="sheet-reasons">
+                <h3>Why This Choice</h3>
+                <ul class="reasons-list"></ul>
+            </div>
+
+            <div class="sheet-actions">
+                <button class="btn-apply hidden">Apply Change</button>
+                <a class="btn-docs" href="#" target="_blank" rel="noopener">View Docs</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Legacy: Left Column Info Panel (hidden in single-pane mode) -->
+    <div id="info-panel-left" class="info-panel split-view-only hidden">
         <button class="close-panel" aria-label="Close panel">&times;</button>
         <h2 class="panel-title"></h2>
         <p class="panel-description"></p>
@@ -132,8 +256,8 @@
         </div>
     </div>
 
-    <!-- Right Column Info Panel (editable, Mixed mode) -->
-    <div id="info-panel-right" class="info-panel hidden">
+    <!-- Legacy: Right Column Info Panel (hidden in single-pane mode) -->
+    <div id="info-panel-right" class="info-panel split-view-only hidden">
         <button class="close-panel" aria-label="Close panel">&times;</button>
         <h2 class="panel-title"></h2>
 
@@ -183,10 +307,6 @@
         <button class="btn-apply-alt hidden">Apply This Alternative</button>
     </div>
 
-    <div id="controls">
-        <button id="btn-deconstruct" class="primary">How It Works</button>
-        <button id="btn-reconstruct" class="hidden">Reconstruct</button>
-    </div>
 
     <!-- Feature tabs - each feature manages its own panel -->
     <div id="feature-tabs" class="feature-tabs">

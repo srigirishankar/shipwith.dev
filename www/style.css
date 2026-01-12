@@ -5,6 +5,7 @@
 }
 
 :root {
+    /* Brand Colors */
     --cf-orange: #F6821F;
     --cf-dark: #1d1d1d;
     --cf-gray: #404040;
@@ -12,6 +13,19 @@
     --text-secondary: #a0a0a0;
     --panel-bg: rgba(29, 29, 29, 0.95);
     --border-subtle: rgba(255, 255, 255, 0.1);
+
+    /* Swimlane Heights */
+    --header-height: 70px;
+    --footer-height: 60px;
+
+    /* Z-Index Layers (organized in 10s for sub-layering) */
+    --z-canvas: 1;
+    --z-chrome: 10;
+    --z-controls: 20;
+    --z-panels: 30;
+    --z-backdrop: 35;
+    --z-sheets: 40;
+    --z-overlay: 100;
 }
 
 body {
@@ -29,7 +43,7 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    z-index: 1;
+    z-index: var(--z-canvas);
 }
 
 #loading-overlay {
@@ -42,7 +56,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 1000;
+    z-index: var(--z-overlay);
     transition: opacity 0.5s ease;
 }
 
@@ -93,7 +107,7 @@ body {
     backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 12px;
-    z-index: 100;
+    z-index: var(--z-chrome);
 }
 
 #cost-matrix table {
@@ -158,7 +172,7 @@ body {
     left: 0;
     right: 0;
     display: flex;
-    z-index: 150;
+    z-index: var(--z-chrome);
     pointer-events: none;
 }
 
@@ -240,7 +254,7 @@ body {
         rgba(255, 255, 255, 0.2) 80%,
         transparent 95%
     );
-    z-index: 100;
+    z-index: var(--z-chrome);
     pointer-events: none;
 }
 
@@ -255,7 +269,7 @@ body {
     backdrop-filter: blur(15px);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 12px;
-    z-index: 100;
+    z-index: var(--z-chrome);
 }
 
 #comparison-table table {
@@ -323,7 +337,7 @@ body {
     border: 1px solid var(--border-subtle);
     border-radius: 12px;
     padding: 1.25rem;
-    z-index: 200;
+    z-index: var(--z-panels);
     backdrop-filter: blur(20px);
     transition: transform 0.3s ease, opacity 0.3s ease;
 }
@@ -608,17 +622,19 @@ body {
     color: var(--text-primary);
 }
 
-#controls {
+/* Controls - now integrated into header via .header-controls */
+/* These rules only apply to legacy standalone #controls (split-view mode) */
+#controls:not(.header-controls) {
     position: fixed;
     top: 4rem;
     left: 50%;
     transform: translateX(-50%);
     display: flex;
     gap: 1rem;
-    z-index: 100;
+    z-index: var(--z-controls);
 }
 
-#controls button {
+#controls:not(.header-controls) button {
     padding: 1rem 2rem;
     font-size: 1rem;
     font-weight: 600;
@@ -628,30 +644,30 @@ body {
     transition: all 0.2s;
 }
 
-#controls button.primary {
+#controls:not(.header-controls) button.primary {
     background: var(--cf-orange);
     color: white;
 }
 
-#controls button.primary:hover {
+#controls:not(.header-controls) button.primary:hover {
     background: #e5750a;
     transform: scale(1.02);
 }
 
-#controls button.hidden {
+#controls:not(.header-controls) button.hidden {
     display: none;
 }
 
 #coming-soon {
     position: fixed;
-    top: 80px;
+    top: var(--header-height);
     left: 20px;
     width: 320px;
     background: var(--panel-bg);
     border: 1px solid var(--border-subtle);
     border-radius: 12px;
     padding: 1.5rem;
-    z-index: 150;
+    z-index: var(--z-panels);
     backdrop-filter: blur(20px);
     text-align: left;
 }
@@ -796,7 +812,7 @@ body {
         top: 4rem;
         left: 50%;
         transform: translateX(-50%);
-        z-index: 100;
+        z-index: var(--z-controls);
     }
 
     #controls button {
@@ -813,4 +829,321 @@ body {
         max-height: 50vh;
     }
 
+    /* Hide split-view elements on mobile */
+    .split-view-only {
+        display: none !important;
+    }
+
+    /* Stack toggle mobile adjustments */
+    .stack-toggle {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        padding: 0.5rem;
+        gap: 0.25rem;
+    }
+
+    .stack-toggle .stack-btn {
+        min-width: 70px;
+        padding: 0.5rem;
+        flex-shrink: 0;
+    }
+
+    .stack-toggle .stack-name {
+        font-size: 0.65rem;
+    }
+
+    /* Summary bar mobile */
+    .summary-bar {
+        flex-direction: column;
+        padding: 0.5rem;
+        gap: 0.5rem;
+    }
+
+    .summary-metrics {
+        width: 100%;
+        justify-content: space-around;
+    }
+}
+
+/* ============================================
+   SINGLE PANE MODE - Stack Toggle
+   ============================================ */
+
+.stack-toggle {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--header-height);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0 1rem;
+    background: linear-gradient(to bottom, rgba(29, 29, 29, 0.95), rgba(29, 29, 29, 0.8));
+    backdrop-filter: blur(10px);
+    z-index: var(--z-controls);
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+/* Header divider between stack buttons and controls */
+.header-divider {
+    width: 1px;
+    height: 32px;
+    background: var(--border-subtle);
+    margin: 0 0.5rem;
+}
+
+/* Controls in header */
+.header-controls {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.header-controls button {
+    padding: 0.5rem 1rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.header-controls button.primary {
+    background: var(--cf-orange);
+    color: white;
+}
+
+.header-controls button.primary:hover {
+    background: #e5750f;
+}
+
+.header-controls button.hidden {
+    display: none;
+}
+
+.stack-toggle .stack-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.5rem 1rem;
+    min-height: 44px; /* Touch target */
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.stack-toggle .stack-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.stack-toggle .stack-btn.active {
+    background: rgba(246, 130, 31, 0.15);
+    border-color: var(--cf-orange);
+    color: var(--cf-orange);
+}
+
+.stack-toggle .stack-btn[data-stack="aws"].active {
+    background: rgba(255, 153, 0, 0.15);
+    border-color: #FF9900;
+    color: #FF9900;
+}
+
+.stack-toggle .stack-btn[data-stack="gcp"].active {
+    background: rgba(66, 133, 244, 0.15);
+    border-color: #4285F4;
+    color: #4285F4;
+}
+
+.stack-toggle .stack-btn[data-stack="azure"].active {
+    background: rgba(0, 120, 212, 0.15);
+    border-color: #0078D4;
+    color: #0078D4;
+}
+
+.stack-toggle .stack-btn[data-stack="custom"].active {
+    background: rgba(16, 185, 129, 0.15);
+    border-color: #10B981;
+    color: #10B981;
+}
+
+.stack-toggle .stack-icon {
+    font-size: 1.25rem;
+}
+
+.stack-toggle .stack-name {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* ============================================
+   SINGLE PANE MODE - Summary Bar
+   ============================================ */
+
+.summary-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: var(--footer-height);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1.5rem;
+    padding: 0 1.5rem;
+    background: rgba(29, 29, 29, 0.95);
+    backdrop-filter: blur(15px);
+    border-top: 1px solid var(--border-subtle);
+    z-index: var(--z-controls);
+}
+
+.summary-baseline {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.summary-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.summary-metrics {
+    display: flex;
+    gap: 1.5rem;
+}
+
+.summary-metric {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.15rem;
+}
+
+.summary-metric .metric-label {
+    font-size: 0.65rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.summary-metric .metric-value {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.summary-metric .metric-diff {
+    font-size: 0.7rem;
+    font-weight: 500;
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+}
+
+.summary-metric .metric-diff.better {
+    color: #10B981;
+    background: rgba(16, 185, 129, 0.15);
+}
+
+.summary-metric .metric-diff.worse {
+    color: #EF4444;
+    background: rgba(239, 68, 68, 0.15);
+}
+
+.summary-metric .metric-diff.neutral {
+    color: var(--text-secondary);
+}
+
+.summary-reset {
+    padding: 0.4rem 0.75rem;
+    font-size: 0.75rem;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.summary-reset:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: var(--text-primary);
+}
+
+.summary-reset.hidden {
+    display: none;
+}
+
+/* ============================================
+   DIFF BADGES
+   ============================================ */
+
+.diff-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.15rem 0.5rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    border-radius: 4px;
+}
+
+.diff-badge.better {
+    background: rgba(16, 185, 129, 0.2);
+    color: #10B981;
+}
+
+.diff-badge.worse {
+    background: rgba(239, 68, 68, 0.2);
+    color: #EF4444;
+}
+
+.diff-badge.neutral {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-secondary);
+}
+
+.diff-badge::before {
+    content: '';
+}
+
+.diff-badge.better::before {
+    content: '↓';
+}
+
+.diff-badge.worse::before {
+    content: '↑';
+}
+
+/* ============================================
+   MODE MUTUAL EXCLUSIVITY
+   Single-pane mode (default) vs Split-view mode
+   ============================================ */
+
+/* Single-pane mode (default): hide all split-view elements */
+.split-view-only {
+    display: none !important;
+}
+
+/* Split-view mode: show split-view elements, hide single-pane elements */
+body.split-view-mode .split-view-only {
+    display: block !important;
+}
+
+body.split-view-mode .stack-toggle,
+body.split-view-mode .summary-bar,
+body.split-view-mode #bottom-sheet,
+body.split-view-mode .sheet-backdrop {
+    display: none !important;
 }

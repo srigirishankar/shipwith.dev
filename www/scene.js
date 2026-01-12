@@ -1,6 +1,21 @@
 // Three.js scene setup for shipwith.dev
 // Wrapped for easy calling from Rust/WASM
 
+// ============================================
+// SINGLE PANE MODE (Responsive Redesign)
+// When true, renders one full-width viewport instead of split
+// ============================================
+let SINGLE_PANE_MODE = true; // Default to new responsive single-pane mode
+
+// Single camera for single-pane mode
+let singleCamera = null;
+
+// Current stack being displayed (in single-pane mode)
+let currentStack = 'cloudflare';
+
+// Track components being animated during stack transition
+let transitioningComponents = new Set();
+
 let scene, camera, renderer, controls;
 // Legacy arrays - now unused, kept for any old code compatibility
 let components = [];
@@ -623,6 +638,222 @@ void main() {
 }
 `;
 
+// ============================================
+// STACK TRANSITION ANIMATIONS (Single Pane Mode)
+// ============================================
+
+/**
+ * Transition the scene to a new stack
+ * @param {string} newStack - The stack to transition to (cloudflare, aws, gcp, azure, custom)
+ */
+function transitionToStack(newStack) {
+    if (newStack === currentStack) return;
+
+    const oldStack = currentStack;
+    currentStack = newStack;
+
+    console.log(`[Scene] Transitioning from ${oldStack} to ${newStack}`);
+
+    // Get the component configs for the new stack
+    const stackConfig = PROVIDER_COMPONENTS[newStack === 'cloudflare' ? 'cf' : newStack] || PROVIDER_COMPONENTS.cf;
+
+    // Animate each swappable component
+    const staggerDelay = 80; // ms between each component animation
+
+    SWAPPABLE_COMPONENTS.forEach((compId, index) => {
+        setTimeout(() => {
+            const config = stackConfig[compId];
+            if (config) {
+                animateStackSwitch(compId, config.name, config.color);
+            }
+        }, index * staggerDelay);
+    });
+
+    // Update the UI (stack toggle buttons)
+    updateStackToggleUI(newStack);
+
+    // Update summary bar metrics
+    updateSummaryBar(newStack);
+}
+
+/**
+ * Animate a single component switching to a new alternative
+ */
+function animateStackSwitch(componentId, newName, newColor) {
+    // Find the component mesh (in single-pane mode, use rightComponents as main)
+    const mesh = rightComponents.find(m => m.userData.componentId === componentId);
+    if (!mesh) return;
+
+    transitioningComponents.add(componentId);
+
+    // Animation phases
+    const duration = 400; // Total animation duration in ms
+    const startTime = Date.now();
+    const startScale = mesh.scale.x;
+    const startColor = mesh.material.uniforms.glowColor.value.clone();
+    const endColor = new THREE.Color(newColor);
+
+    function animateFrame() {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+
+        // Easing function (ease-out-back for slight bounce)
+        const eased = 1 - Math.pow(1 - progress, 3);
+
+        if (progress < 0.5) {
+            // Phase 1: Scale down
+            const scaleProgress = progress * 2;
+            mesh.scale.setScalar(startScale * (1 - scaleProgress * 0.2));
+        } else {
+            // Phase 2: Scale back up with new color
+            if (progress === 0.5 || (progress > 0.5 && mesh.userData.needsTextureUpdate)) {
+                // Update texture at midpoint
+                updateComponentTextureWithAlternative(mesh, newName, newColor);
+                mesh.userData.needsTextureUpdate = false;
+            }
+
+            const scaleProgress = (progress - 0.5) * 2;
+            mesh.scale.setScalar(startScale * (0.8 + scaleProgress * 0.2));
+        }
+
+        // Lerp color throughout
+        lerpColor(mesh.material.uniforms.glowColor.value, endColor, eased);
+
+        if (progress < 1) {
+            requestAnimationFrame(animateFrame);
+        } else {
+            // Animation complete
+            mesh.scale.setScalar(startScale);
+            transitioningComponents.delete(componentId);
+        }
+    }
+
+    mesh.userData.needsTextureUpdate = true;
+    animateFrame();
+}
+
+/**
+ * Lerp between two THREE.Color objects
+ */
+function lerpColor(color, target, alpha) {
+    color.r += (target.r - color.r) * alpha;
+    color.g += (target.g - color.g) * alpha;
+    color.b += (target.b - color.b) * alpha;
+}
+
+/**
+ * Smooth color transition helper
+ */
+function colorTransition(startHex, endHex, progress) {
+    const start = new THREE.Color(startHex);
+    const end = new THREE.Color(endHex);
+
+    return new THREE.Color(
+        start.r + (end.r - start.r) * progress,
+        start.g + (end.g - start.g) * progress,
+        start.b + (end.b - start.b) * progress
+    );
+}
+
+/**
+ * Update the stack toggle button states
+ */
+function updateStackToggleUI(activeStack) {
+    const buttons = document.querySelectorAll('.stack-toggle .stack-btn');
+    buttons.forEach(btn => {
+        const stack = btn.dataset.stack;
+        btn.classList.toggle('active', stack === activeStack);
+    });
+}
+
+/**
+ * Update the summary bar with new metrics
+ */
+function updateSummaryBar(stack) {
+    const metrics = PROVIDER_METRICS[stack === 'cloudflare' ? 'cf' : stack] || PROVIDER_METRICS.cf;
+    const baseline = PROVIDER_METRICS.cf;
+
+    // Update cost
+    const costEl = document.querySelector('#summary-cost .metric-value');
+    const costDiffEl = document.querySelector('#summary-cost .metric-diff');
+    if (costEl) costEl.textContent = metrics.cost;
+    if (costDiffEl) {
+        const costNum = parseInt(metrics.cost.replace(/[^0-9]/g, '')) || 0;
+        const baseNum = parseInt(baseline.cost.replace(/[^0-9]/g, '')) || 0;
+        const diff = costNum - baseNum;
+        if (diff > 0) {
+            costDiffEl.textContent = `+$${diff}`;
+            costDiffEl.className = 'metric-diff worse';
+        } else if (diff < 0) {
+            costDiffEl.textContent = `-$${Math.abs(diff)}`;
+            costDiffEl.className = 'metric-diff better';
+        } else {
+            costDiffEl.textContent = '';
+            costDiffEl.className = 'metric-diff';
+        }
+    }
+
+    // Update latency
+    const latencyEl = document.querySelector('#summary-latency .metric-value');
+    const latencyDiffEl = document.querySelector('#summary-latency .metric-diff');
+    if (latencyEl) latencyEl.textContent = metrics.latency;
+    if (latencyDiffEl) {
+        const latNum = parseInt(metrics.latency) || 0;
+        const baseLatNum = parseInt(baseline.latency) || 0;
+        const diff = latNum - baseLatNum;
+        if (diff > 0) {
+            latencyDiffEl.textContent = `+${diff}ms`;
+            latencyDiffEl.className = 'metric-diff worse';
+        } else if (diff < 0) {
+            latencyDiffEl.textContent = `${diff}ms`;
+            latencyDiffEl.className = 'metric-diff better';
+        } else {
+            latencyDiffEl.textContent = '';
+            latencyDiffEl.className = 'metric-diff';
+        }
+    }
+
+    // Update locations
+    const locEl = document.querySelector('#summary-locations .metric-value');
+    if (locEl) locEl.textContent = metrics.locations;
+
+    // Show/hide reset button
+    const resetBtn = document.getElementById('btn-reset-stack');
+    if (resetBtn) {
+        resetBtn.classList.toggle('hidden', stack === 'cloudflare');
+    }
+}
+
+/**
+ * Calculate viewport width for single-pane mode
+ */
+function fullViewportWidth() {
+    return window.innerWidth;
+}
+
+/**
+ * Initialize stack toggle event listeners
+ */
+function initStackToggle() {
+    const buttons = document.querySelectorAll('.stack-toggle .stack-btn');
+    buttons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const stack = btn.dataset.stack;
+            if (stack) {
+                transitionToStack(stack);
+            }
+        });
+    });
+
+    // Reset button
+    const resetBtn = document.getElementById('btn-reset-stack');
+    if (resetBtn) {
+        resetBtn.addEventListener('click', () => {
+            transitionToStack('cloudflare');
+        });
+    }
+}
+
 // Create a small text sprite for connection labels
 function createLabelSprite(text, color) {
     const canvas = document.createElement('canvas');
@@ -1162,21 +1393,34 @@ function onMouseMove(event) {
 
 // Handle click - raycast to find component
 function onClick(event) {
-    // Determine which side was clicked
-    const isRightSide = event.clientX > window.innerWidth / 2;
-    const activeCamera = isRightSide ? rightCamera : leftCamera;
-    const activeComponents = isRightSide ? rightComponents : leftComponents;
-
-    // Adjust mouse coordinates for the active viewport
+    let activeCamera, activeComponents, isRightSide;
     const adjustedMouse = new THREE.Vector2();
-    if (isRightSide) {
-        // Right half: remap x from [0.5, 1] to [-1, 1]
-        adjustedMouse.x = ((event.clientX / window.innerWidth) - 0.5) * 4 - 1;
+
+    if (SINGLE_PANE_MODE) {
+        // Single-pane mode: use single camera and right components (centered)
+        activeCamera = singleCamera;
+        activeComponents = rightComponents;
+        isRightSide = true; // Always editable in single-pane mode
+
+        // Standard mouse coordinate mapping for full viewport
+        adjustedMouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+        adjustedMouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
     } else {
-        // Left half: remap x from [0, 0.5] to [-1, 1]
-        adjustedMouse.x = (event.clientX / window.innerWidth) * 4 - 1;
+        // Split mode: determine which side was clicked
+        isRightSide = event.clientX > window.innerWidth / 2;
+        activeCamera = isRightSide ? rightCamera : leftCamera;
+        activeComponents = isRightSide ? rightComponents : leftComponents;
+
+        // Adjust mouse coordinates for the active viewport
+        if (isRightSide) {
+            // Right half: remap x from [0.5, 1] to [-1, 1]
+            adjustedMouse.x = ((event.clientX / window.innerWidth) - 0.5) * 4 - 1;
+        } else {
+            // Left half: remap x from [0, 0.5] to [-1, 1]
+            adjustedMouse.x = (event.clientX / window.innerWidth) * 4 - 1;
+        }
+        adjustedMouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
     }
-    adjustedMouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
     raycaster.setFromCamera(adjustedMouse, activeCamera);
     const intersects = raycaster.intersectObjects(activeComponents);
@@ -1195,7 +1439,7 @@ function onClick(event) {
             if (handled) return;
         }
 
-        // Show info panel - editable only on right side
+        // Show info panel - editable only on right side (always true in single-pane mode)
         showInfoPanel(componentId, { editable: isRightSide, side: isRightSide ? 'right' : 'left' });
     }
 }
@@ -1235,19 +1479,31 @@ function onTouchEnd(event) {
 
         // Detect tap: short duration + minimal movement
         if (touchDuration < TAP_THRESHOLD_MS && moveDistance < TAP_MOVE_THRESHOLD) {
-            // Determine which side was tapped
-            const isRightSide = endX > window.innerWidth / 2;
-            const activeCamera = isRightSide ? rightCamera : leftCamera;
-            const activeComponents = isRightSide ? rightComponents : leftComponents;
-
-            // Adjust coordinates for the active viewport
+            let activeCamera, activeComponents, isRightSide;
             const adjustedMouse = new THREE.Vector2();
-            if (isRightSide) {
-                adjustedMouse.x = ((endX / window.innerWidth) - 0.5) * 4 - 1;
+
+            if (SINGLE_PANE_MODE) {
+                // Single-pane mode
+                activeCamera = singleCamera;
+                activeComponents = rightComponents;
+                isRightSide = true;
+
+                adjustedMouse.x = (endX / window.innerWidth) * 2 - 1;
+                adjustedMouse.y = -(endY / window.innerHeight) * 2 + 1;
             } else {
-                adjustedMouse.x = (endX / window.innerWidth) * 4 - 1;
+                // Split mode: determine which side was tapped
+                isRightSide = endX > window.innerWidth / 2;
+                activeCamera = isRightSide ? rightCamera : leftCamera;
+                activeComponents = isRightSide ? rightComponents : leftComponents;
+
+                // Adjust coordinates for the active viewport
+                if (isRightSide) {
+                    adjustedMouse.x = ((endX / window.innerWidth) - 0.5) * 4 - 1;
+                } else {
+                    adjustedMouse.x = (endX / window.innerWidth) * 4 - 1;
+                }
+                adjustedMouse.y = -(endY / window.innerHeight) * 2 + 1;
             }
-            adjustedMouse.y = -(endY / window.innerHeight) * 2 + 1;
 
             // Perform raycast
             raycaster.setFromCamera(adjustedMouse, activeCamera);
@@ -1274,6 +1530,12 @@ function getCurrentPanelComponentId(side = 'right') {
 // Show info panel for a component
 function showInfoPanel(componentId, options = {}) {
     const { editable = true, side = 'right' } = options;
+
+    // In single-pane mode, use bottom sheet instead of side panels
+    if (SINGLE_PANE_MODE) {
+        showBottomSheet(componentId, options);
+        return;
+    }
 
     // Get the correct panel based on side
     const panelId = side === 'left' ? 'info-panel-left' : 'info-panel-right';
@@ -1348,6 +1610,91 @@ function showInfoPanel(componentId, options = {}) {
 
     // Show panel
     panel.classList.remove('hidden');
+}
+
+// ============================================
+// BOTTOM SHEET (Single Pane Mode)
+// ============================================
+
+// Track bottom sheet state
+let bottomSheetComponentId = null;
+
+// Show bottom sheet with component info
+function showBottomSheet(componentId, options = {}) {
+    const sheet = document.getElementById('bottom-sheet');
+    const backdrop = document.getElementById('sheet-backdrop');
+    if (!sheet) return;
+
+    const comp = COMPONENTS.find(c => c.id === componentId);
+    const info = COMPONENT_INFO[componentId];
+    if (!comp || !info) return;
+
+    bottomSheetComponentId = componentId;
+
+    // Get display name based on current provider
+    const displayName = getComponentDisplayName(componentId);
+    const role = comp.role;
+
+    // Update sheet content
+    const titleElement = sheet.querySelector('.sheet-title');
+    const roleElement = sheet.querySelector('.sheet-role');
+    if (titleElement) titleElement.textContent = displayName;
+    if (roleElement) roleElement.textContent = role || '';
+
+    const descElement = sheet.querySelector('.sheet-description');
+    if (descElement) descElement.textContent = info.description;
+
+    // Populate reasons list
+    const reasonsList = sheet.querySelector('.reasons-list');
+    if (reasonsList) {
+        reasonsList.innerHTML = '';
+        info.reasons.forEach(reason => {
+            const li = document.createElement('li');
+            li.textContent = reason;
+            reasonsList.appendChild(li);
+        });
+    }
+
+    // Setup docs link
+    const docsLink = sheet.querySelector('.btn-docs');
+    if (docsLink && info.docs) {
+        docsLink.href = info.docs;
+        docsLink.target = '_blank';
+        docsLink.rel = 'noopener noreferrer';
+    }
+
+    // Setup close button
+    const closeBtn = sheet.querySelector('.close-sheet');
+    if (closeBtn) {
+        closeBtn.onclick = () => hideBottomSheet();
+    }
+
+    // Setup backdrop click to close
+    if (backdrop) {
+        backdrop.onclick = () => hideBottomSheet();
+        backdrop.classList.add('visible');
+    }
+
+    // Show sheet
+    sheet.classList.remove('hidden');
+    sheet.classList.add('visible');
+}
+
+// Hide bottom sheet
+function hideBottomSheet() {
+    const sheet = document.getElementById('bottom-sheet');
+    const backdrop = document.getElementById('sheet-backdrop');
+
+    if (sheet) {
+        sheet.classList.remove('visible');
+        sheet.classList.add('hidden');
+    }
+
+    if (backdrop) {
+        backdrop.classList.remove('visible');
+    }
+
+    bottomSheetComponentId = null;
 }
 
 // Populate alternatives dropdown for a component (panel is the DOM element)
@@ -1919,6 +2266,12 @@ function flashComponent(mesh, color) {
 
 // Hide info panel for a specific side (or both if no side specified)
 function hideInfoPanel(side) {
+    // In single-pane mode, hide bottom sheet
+    if (SINGLE_PANE_MODE) {
+        hideBottomSheet();
+        return;
+    }
+
     if (side === 'left' || !side) {
         const leftPanel = document.getElementById('info-panel-left');
         if (leftPanel) {
@@ -2284,21 +2637,31 @@ window.initScene = function() {
     );
     currentViewShift = viewShift;
 
-    // Two cameras for split viewport - half aspect ratio each (adjusted for header)
-    const halfAspect = (window.innerWidth / 2) / adjustedHeight;
+    // Camera setup depends on mode
+    if (SINGLE_PANE_MODE) {
+        // Single centered camera for full-width viewport
+        const fullAspect = window.innerWidth / adjustedHeight;
+        singleCamera = new THREE.PerspectiveCamera(60, fullAspect, 0.1, 1000);
+        singleCamera.position.set(0, 1, cameraZ);
+        singleCamera.lookAt(0, -0.5, 0);
+        camera = singleCamera;
+    } else {
+        // Two cameras for split viewport - half aspect ratio each (adjusted for header)
+        const halfAspect = (window.innerWidth / 2) / adjustedHeight;
 
-    // Left camera (Cloudflare side) - shifted to make room for panel on right of left column
-    leftCamera = new THREE.PerspectiveCamera(60, halfAspect, 0.1, 1000);
-    leftCamera.position.set(LEFT_OFFSET + currentViewShift, 1, cameraZ);
-    leftCamera.lookAt(LEFT_OFFSET + currentViewShift, -0.5, 0);
+        // Left camera (Cloudflare side) - shifted to make room for panel on right of left column
+        leftCamera = new THREE.PerspectiveCamera(60, halfAspect, 0.1, 1000);
+        leftCamera.position.set(LEFT_OFFSET + currentViewShift, 1, cameraZ);
+        leftCamera.lookAt(LEFT_OFFSET + currentViewShift, -0.5, 0);
 
-    // Right camera (Mixed side) - shifted to make room for panel on right of right column
-    rightCamera = new THREE.PerspectiveCamera(60, halfAspect, 0.1, 1000);
-    rightCamera.position.set(RIGHT_OFFSET + currentViewShift, 1, cameraZ);
-    rightCamera.lookAt(RIGHT_OFFSET + currentViewShift, -0.5, 0);
+        // Right camera (Mixed side) - shifted to make room for panel on right of right column
+        rightCamera = new THREE.PerspectiveCamera(60, halfAspect, 0.1, 1000);
+        rightCamera.position.set(RIGHT_OFFSET + currentViewShift, 1, cameraZ);
+        rightCamera.lookAt(RIGHT_OFFSET + currentViewShift, -0.5, 0);
 
-    // Main camera (for backwards compatibility)
-    camera = leftCamera;
+        // Main camera (for backwards compatibility)
+        camera = leftCamera;
+    }
 
     // Renderer
     renderer = new THREE.WebGLRenderer({
@@ -2307,57 +2670,65 @@ window.initScene = function() {
     });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setScissorTest(true);  // Enable scissor for split view
+    renderer.setScissorTest(!SINGLE_PANE_MODE);  // Only enable scissor for split view
 
     // Disable orbit controls for split view (each side is independent)
     controls = null;
 
     // Raycaster for click detection
     raycaster = new THREE.Raycaster();
-    // Enable raycaster to test against layers 1 and 2 (left and right components)
-    raycaster.layers.enable(1);
-    raycaster.layers.enable(2);
+    if (SINGLE_PANE_MODE) {
+        // In single-pane mode, components are on layer 0 (default)
+        raycaster.layers.set(0);
+    } else {
+        // Enable raycaster to test against layers 1 and 2 (left and right components)
+        raycaster.layers.enable(1);
+        raycaster.layers.enable(2);
+    }
     mouse = new THREE.Vector2();
 
     // =============================================
     // Create LEFT side components (Pure Cloudflare)
-    // Use layer 1 for left side
+    // Skip in single-pane mode
     // =============================================
-    COMPONENTS.forEach(comp => {
-        const mesh = createComponentWithOffset(comp, LEFT_OFFSET);
-        mesh.layers.set(1);  // Left side = layer 1
-        mesh.userData.side = 'left';
-        scene.add(mesh);
-        leftComponents.push(mesh);
-    });
-    console.log(`Added ${leftComponents.length} LEFT (CF) components`);
+    if (!SINGLE_PANE_MODE) {
+        COMPONENTS.forEach(comp => {
+            const mesh = createComponentWithOffset(comp, LEFT_OFFSET);
+            mesh.layers.set(1);  // Left side = layer 1
+            mesh.userData.side = 'left';
+            scene.add(mesh);
+            leftComponents.push(mesh);
+        });
+        console.log(`Added ${leftComponents.length} LEFT (CF) components`);
 
-    // Create LEFT side connections
-    CONNECTIONS.forEach(connDef => {
-        const result = createConnectionWithOffset(connDef, LEFT_OFFSET, leftComponents);
-        if (result) {
-            result.line.layers.set(1);  // Left side = layer 1
-            scene.add(result.line);
-            leftConnections.push(result.line);
+        // Create LEFT side connections
+        CONNECTIONS.forEach(connDef => {
+            const result = createConnectionWithOffset(connDef, LEFT_OFFSET, leftComponents);
+            if (result) {
+                result.line.layers.set(1);  // Left side = layer 1
+                scene.add(result.line);
+                leftConnections.push(result.line);
 
-            // Add particles (left side = Cloudflare, always fast)
-            const numParticles = 2 + Math.floor(Math.random() * 2);
-            for (let i = 0; i < numParticles; i++) {
-                const particle = createParticle(result.line, 'left');
-                particle.layers.set(1);  // Left side = layer 1
-                scene.add(particle);
-                leftParticles.push(particle);
+                // Add particles (left side = Cloudflare, always fast)
+                const numParticles = 2 + Math.floor(Math.random() * 2);
+                for (let i = 0; i < numParticles; i++) {
+                    const particle = createParticle(result.line, 'left');
+                    particle.layers.set(1);  // Left side = layer 1
+                    scene.add(particle);
+                    leftParticles.push(particle);
+                }
             }
-        }
-    });
+        });
+    }
 
     // =============================================
     // Create RIGHT side components (Mixed - editable)
-    // Use layer 2 for right side
+    // In single-pane mode, these are centered at x=0
     // =============================================
+    const componentOffset = SINGLE_PANE_MODE ? 0 : RIGHT_OFFSET;
     COMPONENTS.forEach(comp => {
-        const mesh = createComponentWithOffset(comp, RIGHT_OFFSET);
-        mesh.layers.set(2);  // Right side = layer 2
+        const mesh = createComponentWithOffset(comp, componentOffset);
+        mesh.layers.set(SINGLE_PANE_MODE ? 0 : 2);  // Layer 0 (default) in single-pane, layer 2 in split
         mesh.userData.side = 'right';
         scene.add(mesh);
         rightComponents.push(mesh);
@@ -2366,9 +2737,9 @@ window.initScene = function() {
 
     // Create RIGHT side connections
     CONNECTIONS.forEach(connDef => {
-        const result = createConnectionWithOffset(connDef, RIGHT_OFFSET, rightComponents);
+        const result = createConnectionWithOffset(connDef, componentOffset, rightComponents);
         if (result) {
-            result.line.layers.set(2);  // Right side = layer 2
+            result.line.layers.set(SINGLE_PANE_MODE ? 0 : 2);  // Layer 0 in single-pane, layer 2 in split
             scene.add(result.line);
             rightConnections.push(result.line);
 
@@ -2376,7 +2747,7 @@ window.initScene = function() {
             const numParticles = 2 + Math.floor(Math.random() * 2);
             for (let i = 0; i < numParticles; i++) {
                 const particle = createParticle(result.line, 'right');
-                particle.layers.set(2);  // Right side = layer 2
+                particle.layers.set(SINGLE_PANE_MODE ? 0 : 2);  // Layer 0 in single-pane, layer 2 in split
                 scene.add(particle);
                 rightParticles.push(particle);
             }
@@ -2384,8 +2755,10 @@ window.initScene = function() {
     });
 
     // Set camera layers - each camera only sees its side
-    leftCamera.layers.set(1);   // Left camera sees layer 1
-    rightCamera.layers.set(2);  // Right camera sees layer 2
+    if (!SINGLE_PANE_MODE) {
+        leftCamera.layers.set(1);   // Left camera sees layer 1
+        rightCamera.layers.set(2);  // Right camera sees layer 2
+    }
 
     console.log(`Created ${leftComponents.length} LEFT + ${rightComponents.length} RIGHT components`);
 
@@ -2409,6 +2782,12 @@ window.initScene = function() {
 
     // Create debug bounds visualization
     createDebugBounds(cameraZ, halfFrustumWidth);
+
+    // Initialize stack toggle for single-pane mode
+    if (SINGLE_PANE_MODE) {
+        initStackToggle();
+        updateSummaryBar('cloudflare');
+    }
 
     // Start animation loop
     isInitialized = true;
@@ -2447,24 +2826,35 @@ function onResize() {
     const { cameraZ, viewShift, halfFrustumWidth } = calculateCameraParams(width, adjustedHeight);
     currentViewShift = viewShift;
 
-    const halfAspect = (width / 2) / adjustedHeight;
+    if (SINGLE_PANE_MODE) {
+        // Update single camera for full-width viewport
+        if (singleCamera) {
+            const fullAspect = width / adjustedHeight;
+            singleCamera.aspect = fullAspect;
+            singleCamera.position.set(0, 1, cameraZ);
+            singleCamera.lookAt(0, -0.5, 0);
+            singleCamera.updateProjectionMatrix();
+        }
+    } else {
+        const halfAspect = (width / 2) / adjustedHeight;
 
-    // Update both cameras for split view
-    if (leftCamera) {
-        leftCamera.aspect = halfAspect;
-        leftCamera.position.set(LEFT_OFFSET + currentViewShift, 1, cameraZ);
-        leftCamera.lookAt(LEFT_OFFSET + currentViewShift, -0.5, 0);
-        leftCamera.updateProjectionMatrix();
-    }
-    if (rightCamera) {
-        rightCamera.aspect = halfAspect;
-        rightCamera.position.set(RIGHT_OFFSET + currentViewShift, 1, cameraZ);
-        rightCamera.lookAt(RIGHT_OFFSET + currentViewShift, -0.5, 0);
-        rightCamera.updateProjectionMatrix();
+        // Update both cameras for split view
+        if (leftCamera) {
+            leftCamera.aspect = halfAspect;
+            leftCamera.position.set(LEFT_OFFSET + currentViewShift, 1, cameraZ);
+            leftCamera.lookAt(LEFT_OFFSET + currentViewShift, -0.5, 0);
+            leftCamera.updateProjectionMatrix();
+        }
+        if (rightCamera) {
+            rightCamera.aspect = halfAspect;
+            rightCamera.position.set(RIGHT_OFFSET + currentViewShift, 1, cameraZ);
+            rightCamera.lookAt(RIGHT_OFFSET + currentViewShift, -0.5, 0);
+            rightCamera.updateProjectionMatrix();
+        }
     }
 
     // Legacy camera update (for backwards compatibility)
-    if (camera && camera !== leftCamera && camera !== rightCamera) {
+    if (camera && camera !== leftCamera && camera !== rightCamera && camera !== singleCamera) {
         camera.aspect = width / height;
         camera.updateProjectionMatrix();
     }
@@ -2488,49 +2878,65 @@ function animate() {
         controls.update();
     }
 
-    // Detect hovered component via raycasting (check both sides)
+    // Detect hovered component via raycasting
     if (raycaster && mouse) {
-        const isRightSide = mouse.x > 0;  // mouse.x is normalized -1 to 1
-        const activeCamera = isRightSide ? rightCamera : leftCamera;
-        const activeComponents = isRightSide ? rightComponents : leftComponents;
-
-        // Adjust mouse for the active viewport
+        let activeCamera, activeComponents;
         const adjustedMouse = new THREE.Vector2();
-        if (isRightSide) {
-            adjustedMouse.x = (mouse.x - 0) * 2 - 1;  // Remap right half
+
+        if (SINGLE_PANE_MODE) {
+            // Single-pane mode: use single camera and right components
+            activeCamera = singleCamera;
+            activeComponents = rightComponents;
+            adjustedMouse.x = mouse.x;
+            adjustedMouse.y = mouse.y;
         } else {
-            adjustedMouse.x = (mouse.x + 1) * 2 - 1;  // Remap left half
+            // Split mode: check both sides
+            const isRightSide = mouse.x > 0;  // mouse.x is normalized -1 to 1
+            activeCamera = isRightSide ? rightCamera : leftCamera;
+            activeComponents = isRightSide ? rightComponents : leftComponents;
+
+            // Adjust mouse for the active viewport
+            if (isRightSide) {
+                adjustedMouse.x = (mouse.x - 0) * 2 - 1;  // Remap right half
+            } else {
+                adjustedMouse.x = (mouse.x + 1) * 2 - 1;  // Remap left half
+            }
+            adjustedMouse.y = mouse.y;
         }
-        adjustedMouse.y = mouse.y;
 
         raycaster.setFromCamera(adjustedMouse, activeCamera);
         const intersects = raycaster.intersectObjects(activeComponents);
         hoveredComponent = intersects.length > 0 ? intersects[0].object : null;
     }
 
-    // Update LEFT side components (face left camera + apply column shift)
-    leftComponents.forEach((mesh, i) => {
-        mesh.lookAt(leftCamera.position);
-        updateComponentUniforms(mesh, time, i, leftComponents);
+    // Update LEFT side components (skip in single-pane mode)
+    if (!SINGLE_PANE_MODE && leftCamera) {
+        leftComponents.forEach((mesh, i) => {
+            mesh.lookAt(leftCamera.position);
+            updateComponentUniforms(mesh, time, i, leftComponents);
 
-        // Animate position shift when panel opens/closes (skip during reconstruct/explode animations)
-        if (!isExploded && !isReconstructing) {
-            const targetX = mesh.userData.basePosition.x + leftColumnShift;
-            mesh.position.x += (targetX - mesh.position.x) * 0.1; // Smooth lerp
-        }
-    });
+            // Animate position shift when panel opens/closes (skip during reconstruct/explode animations)
+            if (!isExploded && !isReconstructing) {
+                const targetX = mesh.userData.basePosition.x + leftColumnShift;
+                mesh.position.x += (targetX - mesh.position.x) * 0.1; // Smooth lerp
+            }
+        });
+    }
 
-    // Update RIGHT side components (face right camera + apply column shift)
-    rightComponents.forEach((mesh, i) => {
-        mesh.lookAt(rightCamera.position);
-        updateComponentUniforms(mesh, time, i, rightComponents);
+    // Update RIGHT side components (face appropriate camera)
+    const rightCam = SINGLE_PANE_MODE ? singleCamera : rightCamera;
+    if (rightCam) {
+        rightComponents.forEach((mesh, i) => {
+            mesh.lookAt(rightCam.position);
+            updateComponentUniforms(mesh, time, i, rightComponents);
 
-        // Animate position shift when panel opens/closes (skip during reconstruct/explode animations)
-        if (!isExploded && !isReconstructing) {
-            const targetX = mesh.userData.basePosition.x + rightColumnShift;
-            mesh.position.x += (targetX - mesh.position.x) * 0.1; // Smooth lerp
-        }
-    });
+            // Animate position shift when panel opens/closes (skip during reconstruct/explode animations)
+            if (!isExploded && !isReconstructing) {
+                const targetX = mesh.userData.basePosition.x + rightColumnShift;
+                mesh.position.x += (targetX - mesh.position.x) * 0.1; // Smooth lerp
+            }
+        });
+    }
 
     // Update connection curves (both sides)
     [...leftConnections, ...rightConnections].forEach(conn => {
@@ -2574,21 +2980,28 @@ function animate() {
     });
 
     // =============================================
-    // SPLIT VIEWPORT RENDERING
+    // RENDERING
     // =============================================
 
-    // Adjust height to leave space for header (column labels + dropdown)
+    // Adjust height to leave space for header (stack toggle)
     const adjustedHeight = height - HEADER_HEIGHT_PX;
 
-    // Left viewport (Cloudflare Native)
-    renderer.setViewport(0, 0, halfWidth, adjustedHeight);
-    renderer.setScissor(0, 0, halfWidth, adjustedHeight);
-    renderer.render(scene, leftCamera);
+    if (SINGLE_PANE_MODE) {
+        // Single full-width viewport
+        renderer.setViewport(0, 0, width, adjustedHeight);
+        renderer.render(scene, singleCamera);
+    } else {
+        // Split viewport rendering
+        // Left viewport (Cloudflare Native)
+        renderer.setViewport(0, 0, halfWidth, adjustedHeight);
+        renderer.setScissor(0, 0, halfWidth, adjustedHeight);
+        renderer.render(scene, leftCamera);
 
-    // Right viewport (Mixed/Customizable)
-    renderer.setViewport(halfWidth, 0, halfWidth, adjustedHeight);
-    renderer.setScissor(halfWidth, 0, halfWidth, adjustedHeight);
-    renderer.render(scene, rightCamera);
+        // Right viewport (Mixed/Customizable)
+        renderer.setViewport(halfWidth, 0, halfWidth, adjustedHeight);
+        renderer.setScissor(halfWidth, 0, halfWidth, adjustedHeight);
+        renderer.render(scene, rightCamera);
+    }
 }
 
 // Helper function to update component shader uniforms
