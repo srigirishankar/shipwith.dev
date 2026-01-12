@@ -1,6 +1,21 @@
 // Three.js scene setup for shipwith.dev
 // Wrapped for easy calling from Rust/WASM
 
+// ============================================
+// SINGLE PANE MODE (Responsive Redesign)
+// When true, renders one full-width viewport instead of split
+// ============================================
+let SINGLE_PANE_MODE = true; // Default to new responsive single-pane mode
+
+// Single camera for single-pane mode
+let singleCamera = null;
+
+// Current stack being displayed (in single-pane mode)
+let currentStack = 'cloudflare';
+
+// Track components being animated during stack transition
+let transitioningComponents = new Set();
+
 let scene, camera, renderer, controls;
 // Legacy arrays - now unused, kept for any old code compatibility
 let components = [];
@@ -622,6 +637,222 @@ void main() {
     gl_FragColor = vec4(finalColor, finalAlpha);
 }
 `;
+
+// ============================================
+// STACK TRANSITION ANIMATIONS (Single Pane Mode)
+// ============================================
+
+/**
+ * Transition the scene to a new stack
+ * @param {string} newStack - The stack to transition to (cloudflare, aws, gcp, azure, custom)
+ */
+function transitionToStack(newStack) {
+    if (newStack === currentStack) return;
+
+    const oldStack = currentStack;
+    currentStack = newStack;
+
+    console.log(`[Scene] Transitioning from ${oldStack} to ${newStack}`);
+
+    // Get the component configs for the new stack
+    const stackConfig = PROVIDER_COMPONENTS[newStack === 'cloudflare' ? 'cf' : newStack] || PROVIDER_COMPONENTS.cf;
+
+    // Animate each swappable component
+    const staggerDelay = 80; // ms between each component animation
+
+    SWAPPABLE_COMPONENTS.forEach((compId, index) => {
+        setTimeout(() => {
+            const config = stackConfig[compId];
+            if (config) {
+                animateStackSwitch(compId, config.name, config.color);
+            }
+        }, index * staggerDelay);
+    });
+
+    // Update the UI (stack toggle buttons)
+    updateStackToggleUI(newStack);
+
+    // Update summary bar metrics
+    updateSummaryBar(newStack);
+}
+
+/**
+ * Animate a single component switching to a new alternative
+ */
+function animateStackSwitch(componentId, newName, newColor) {
+    // Find the component mesh (in single-pane mode, use rightComponents as main)
+    const mesh = rightComponents.find(m => m.userData.componentId === componentId);
+    if (!mesh) return;
+
+    transitioningComponents.add(componentId);
+
+    // Animation phases
+    const duration = 400; // Total animation duration in ms
+    const startTime = Date.now();
+    const startScale = mesh.scale.x;
+    const startColor = mesh.material.uniforms.glowColor.value.clone();
+    const endColor = new THREE.Color(newColor);
+
+    function animateFrame() {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+
+        // Easing function (ease-out-back for slight bounce)
+        const eased = 1 - Math.pow(1 - progress, 3);
+
+        if (progress < 0.5) {
+            // Phase 1: Scale down
+            const scaleProgress = progress * 2;
+            mesh.scale.setScalar(startScale * (1 - scaleProgress * 0.2));
+        } else {
+            // Phase 2: Scale back up with new color
+            if (progress === 0.5 || (progress > 0.5 && mesh.userData.needsTextureUpdate)) {
+                // Update texture at midpoint
+                updateComponentTextureWithAlternative(mesh, newName, newColor);
+                mesh.userData.needsTextureUpdate = false;
+            }
+
+            const scaleProgress = (progress - 0.5) * 2;
+            mesh.scale.setScalar(startScale * (0.8 + scaleProgress * 0.2));
+        }
+
+        // Lerp color throughout
+        lerpColor(mesh.material.uniforms.glowColor.value, endColor, eased);
+
+        if (progress < 1) {
+            requestAnimationFrame(animateFrame);
+        } else {
+            // Animation complete
+            mesh.scale.setScalar(startScale);
+            transitioningComponents.delete(componentId);
+        }
+    }
+
+    mesh.userData.needsTextureUpdate = true;
+    animateFrame();
+}
+
+/**
+ * Lerp between two THREE.Color objects
+ */
+function lerpColor(color, target, alpha) {
+    color.r += (target.r - color.r) * alpha;
+    color.g += (target.g - color.g) * alpha;
+    color.b += (target.b - color.b) * alpha;
+}
+
+/**
+ * Smooth color transition helper
+ */
+function colorTransition(startHex, endHex, progress) {
+    const start = new THREE.Color(startHex);
+    const end = new THREE.Color(endHex);
+
+    return new THREE.Color(
+        start.r + (end.r - start.r) * progress,
+        start.g + (end.g - start.g) * progress,
+        start.b + (end.b - start.b) * progress
+    );
+}
+
+/**
+ * Update the stack toggle button states
+ */
+function updateStackToggleUI(activeStack) {
+    const buttons = document.querySelectorAll('.stack-toggle .stack-btn');
+    buttons.forEach(btn => {
+        const stack = btn.dataset.stack;
+        btn.classList.toggle('active', stack === activeStack);
+    });
+}
+
+/**
+ * Update the summary bar with new metrics
+ */
+function updateSummaryBar(stack) {
+    const metrics = PROVIDER_METRICS[stack === 'cloudflare' ? 'cf' : stack] || PROVIDER_METRICS.cf;
+    const baseline = PROVIDER_METRICS.cf;
+
+    // Update cost
+    const costEl = document.querySelector('#summary-cost .metric-value');
+    const costDiffEl = document.querySelector('#summary-cost .metric-diff');
+    if (costEl) costEl.textContent = metrics.cost;
+    if (costDiffEl) {
+        const costNum = parseInt(metrics.cost.replace(/[^0-9]/g, '')) || 0;
+        const baseNum = parseInt(baseline.cost.replace(/[^0-9]/g, '')) || 0;
+        const diff = costNum - baseNum;
+        if (diff > 0) {
+            costDiffEl.textContent = `+$${diff}`;
+            costDiffEl.className = 'metric-diff worse';
+        } else if (diff < 0) {
+            costDiffEl.textContent = `-$${Math.abs(diff)}`;
+            costDiffEl.className = 'metric-diff better';
+        } else {
+            costDiffEl.textContent = '';
+            costDiffEl.className = 'metric-diff';
+        }
+    }
+
+    // Update latency
+    const latencyEl = document.querySelector('#summary-latency .metric-value');
+    const latencyDiffEl = document.querySelector('#summary-latency .metric-diff');
+    if (latencyEl) latencyEl.textContent = metrics.latency;
+    if (latencyDiffEl) {
+        const latNum = parseInt(metrics.latency) || 0;
+        const baseLatNum = parseInt(baseline.latency) || 0;
+        const diff = latNum - baseLatNum;
+        if (diff > 0) {
+            latencyDiffEl.textContent = `+${diff}ms`;
+            latencyDiffEl.className = 'metric-diff worse';
+        } else if (diff < 0) {
+            latencyDiffEl.textContent = `${diff}ms`;
+            latencyDiffEl.className = 'metric-diff better';
+        } else {
+            latencyDiffEl.textContent = '';
+            latencyDiffEl.className = 'metric-diff';
+        }
+    }
+
+    // Update locations
+    const locEl = document.querySelector('#summary-locations .metric-value');
+    if (locEl) locEl.textContent = metrics.locations;
+
+    // Show/hide reset button
+    const resetBtn = document.getElementById('btn-reset-stack');
+    if (resetBtn) {
+        resetBtn.classList.toggle('hidden', stack === 'cloudflare');
+    }
+}
+
+/**
+ * Calculate viewport width for single-pane mode
+ */
+function fullViewportWidth() {
+    return window.innerWidth;
+}
+
+/**
+ * Initialize stack toggle event listeners
+ */
+function initStackToggle() {
+    const buttons = document.querySelectorAll('.stack-toggle .stack-btn');
+    buttons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const stack = btn.dataset.stack;
+            if (stack) {
+                transitionToStack(stack);
+            }
+        });
+    });
+
+    // Reset button
+    const resetBtn = document.getElementById('btn-reset-stack');
+    if (resetBtn) {
+        resetBtn.addEventListener('click', () => {
+            transitionToStack('cloudflare');
+        });
+    }
+}
 
 // Create a small text sprite for connection labels
 function createLabelSprite(text, color) {
@@ -2409,6 +2640,12 @@ window.initScene = function() {
 
     // Create debug bounds visualization
     createDebugBounds(cameraZ, halfFrustumWidth);
+
+    // Initialize stack toggle for single-pane mode
+    if (SINGLE_PANE_MODE) {
+        initStackToggle();
+        updateSummaryBar('cloudflare');
+    }
 
     // Start animation loop
     isInitialized = true;
