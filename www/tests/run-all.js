@@ -18,7 +18,8 @@ const testFiles = [
     'stack-state.test.js',
     'scene-data.test.js',
     'ui-behavior.test.js',
-    'responsive-redesign.test.js'
+    'responsive-redesign.test.js',
+    'scene-behavior.test.js'
 ];
 
 console.log('\n' + '╔' + '═'.repeat(58) + '╗');

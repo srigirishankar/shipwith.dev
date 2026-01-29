@@ -18,9 +18,6 @@ let transitioningComponents = new Set();
 
 let scene, camera, renderer, controls;
 // Legacy arrays - now unused, kept for any old code compatibility
-let components = [];
-let connections = [];
-let particles = [];
 let isInitialized = false;
 let isExploded = false;
 let currentProvider = 'mixed';
@@ -42,7 +39,8 @@ const LEFT_OFFSET = -5;
 const RIGHT_OFFSET = 5;
 
 // Debug mode - shows boundary lines for component areas
-const DEBUG_BOUNDS = true;
+const DEBUG_BOUNDS = typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).has('debugBounds');
 let debugLines = [];
 
 // Panel dimensions (must match CSS)
@@ -365,7 +363,6 @@ const RECOMMENDED_STACKS = {
 // ============================================
 // Comparison Mode State
 // ============================================
-let comparisonMode = false;
 let comparisonScene = null;  // Cloned scene for right side
 let comparisonState = {
     left: { ...componentProviders },  // Current selection
@@ -382,15 +379,6 @@ let touchStartTime = 0;
 let touchStartPos = { x: 0, y: 0 };
 const TAP_THRESHOLD_MS = 300;
 const TAP_MOVE_THRESHOLD = 10;
-
-// Provider-specific metrics (total for hobby app ~100k req/mo)
-// Latency = max component latency for that provider (consistent with calculateMixedMetrics)
-const PROVIDER_METRICS = {
-    cf: { cost: '$0', latency: '20ms', uptime: '99.99%', locations: '300+' },      // max(12,10,5,20)
-    gcp: { cost: '$15/mo', latency: '100ms', uptime: '99.95%', locations: '35' },  // max(50,15,20,100)
-    aws: { cost: '$45/mo', latency: '50ms', uptime: '99.99%', locations: '400+' }, // max(30,15,10,50)
-    azure: { cost: '$70/mo', latency: '100ms', uptime: '99.95%', locations: '60+' } // max(50,15,20,100)
-};
 
 // Provider-specific component names (only for swappable services)
 // Primary colors: CF=Orange, AWS=Yellow, GCP=Green, Azure=Blue
@@ -428,21 +416,50 @@ const PROVIDER_COMPONENTS = {
     }
 };
 
-// Per-component costs in $/month for hobby app (~100k requests)
-const COMPONENT_COSTS = {
-    workers: { cf: 0, gcp: 0, aws: 0, azure: 0 },
-    pages: { cf: 0, gcp: 0, aws: 0, azure: 0 },
-    kv: { cf: 0, gcp: 0, aws: 0, azure: 5 },
-    d1: { cf: 0, gcp: 15, aws: 45, azure: 65 }
+// Component ids used by stack-state metrics (for baseline providers)
+const PROVIDER_COMPONENT_IDS = {
+    cf: { workers: 'cf-workers', pages: 'cf-pages', kv: 'cf-kv', d1: 'cf-d1' },
+    aws: { workers: 'lambda-edge', pages: 'amplify', kv: 'dynamodb', d1: 'aurora' },
+    gcp: { workers: 'cloud-run', pages: 'firebase', kv: 'firestore', d1: 'cloud-sql' },
+    azure: { workers: 'azure-functions', pages: 'static-web-apps', kv: 'cosmos-db', d1: 'azure-sql' }
 };
 
-// Per-component latency in ms (warm, p50)
-const COMPONENT_LATENCY = {
-    workers: { cf: 12, gcp: 50, aws: 30, azure: 50 },
-    pages: { cf: 10, gcp: 15, aws: 15, azure: 15 },
-    kv: { cf: 5, gcp: 20, aws: 10, azure: 20 },
-    d1: { cf: 20, gcp: 100, aws: 50, azure: 100 }
-};
+function formatSummaryMetrics(metrics) {
+    if (!metrics) return null;
+    return {
+        cost: metrics.cost === 0 ? '$0' : `$${metrics.cost}/mo`,
+        latency: `${metrics.latency}ms`,
+        locations: `${metrics.locations}+`
+    };
+}
+
+function getSummaryMetrics(stack) {
+    const presets = window.StackState?.STACK_PRESETS;
+    const key = stack === 'cloudflare' ? 'cloudflare' : stack;
+    if (presets?.[key]?.metrics) {
+        return formatSummaryMetrics(presets[key].metrics);
+    }
+
+    if (stack === 'custom' || stack === 'mixed') {
+        return calculateMixedMetrics();
+    }
+
+    return null;
+}
+
+function getProviderComponentMetrics(componentId, provider) {
+    const metricsMap = window.StackState?.COMPONENT_METRICS;
+    const providerComponentId = PROVIDER_COMPONENT_IDS[provider]?.[componentId];
+    if (metricsMap && providerComponentId && metricsMap[providerComponentId]) {
+        return metricsMap[providerComponentId];
+    }
+
+    return {
+        cost: 0,
+        latency: 10,
+        locations: 0
+    };
+}
 
 // Non-vendor component colors (distinct from provider colors)
 const NON_VENDOR_COLORS = {
@@ -656,6 +673,17 @@ function transitionToStack(newStack) {
 
     // Get the component configs for the new stack
     const stackConfig = PROVIDER_COMPONENTS[newStack === 'cloudflare' ? 'cf' : newStack] || PROVIDER_COMPONENTS.cf;
+    const providerCode = newStack === 'cloudflare' ? 'cf' : newStack;
+
+    // Reset custom selections when switching presets
+    if (newStack !== 'custom') {
+        selectedAlternatives = {};
+        SWAPPABLE_COMPONENTS.forEach(id => {
+            componentProviders[id] = providerCode;
+        });
+        isMixedMode = providerCode === 'mixed';
+        currentProvider = providerCode;
+    }
 
     // Animate each swappable component
     const staggerDelay = 80; // ms between each component animation
@@ -681,7 +709,7 @@ function transitionToStack(newStack) {
  */
 function animateStackSwitch(componentId, newName, newColor) {
     // Find the component mesh (in single-pane mode, use rightComponents as main)
-    const mesh = rightComponents.find(m => m.userData.componentId === componentId);
+    const mesh = rightComponents.find(m => m.userData.id === componentId);
     if (!mesh) return;
 
     transitioningComponents.add(componentId);
@@ -770,8 +798,12 @@ function updateStackToggleUI(activeStack) {
  * Update the summary bar with new metrics
  */
 function updateSummaryBar(stack) {
-    const metrics = PROVIDER_METRICS[stack === 'cloudflare' ? 'cf' : stack] || PROVIDER_METRICS.cf;
-    const baseline = PROVIDER_METRICS.cf;
+    const metrics = getSummaryMetrics(stack);
+    const baseline = getSummaryMetrics('cloudflare');
+    if (!metrics || !baseline) {
+        console.warn('[Scene] Summary metrics unavailable; ensure StackState is loaded');
+        return;
+    }
 
     // Update cost
     const costEl = document.querySelector('#summary-cost .metric-value');
@@ -1301,10 +1333,14 @@ function createParticle(connection, side = 'right') {
     const destId = connection.userData.to;
     let latency = 10; // Default for non-vendor components
 
-    if (COMPONENT_LATENCY[destId]) {
-        // For vendor components, use provider-specific latency
-        const provider = side === 'left' ? 'cf' : (componentProviders[destId] || 'cf');
-        latency = COMPONENT_LATENCY[destId][provider] || 10;
+    if (SWAPPABLE_COMPONENTS.includes(destId)) {
+        // For vendor components, use selection-aware latency on right side
+        if (side === 'right') {
+            latency = getComponentMetricsForSelection(destId).latency || 10;
+        } else {
+            const provider = 'cf';
+            latency = getProviderComponentMetrics(destId, provider).latency || 10;
+        }
     }
 
     // Speed formula: faster for low latency, slower for high latency
@@ -1881,7 +1917,7 @@ function showCompatibilityWarnings(panel, componentId, alternative) {
     for (const [currentCompId, currentProvider] of Object.entries(componentProviders)) {
         if (currentCompId === componentId) continue;
 
-        const currentAltId = `cf-${currentCompId}`;
+        const currentAltId = getCurrentComponentAltId(currentCompId);
 
         // Skip warning if we already have a recommendation for this component via pairsWellWith
         const hasRecommendation = alternative.pairsWellWith?.some(pairedId => {
@@ -2205,6 +2241,11 @@ function applyAlternativeToComponent(componentId, alternativeId, alternativeName
 
     // Mark this as switched in our state
     selectedAlternatives[componentId] = alternativeId;
+    if (SWAPPABLE_COMPONENTS.includes(componentId) && alternative.provider) {
+        componentProviders[componentId] = alternative.provider;
+        isMixedMode = true;
+        currentProvider = 'mixed';
+    }
 
     // Remove from affected list since it's now applied
     affectedComponents.delete(componentId);
@@ -2212,6 +2253,7 @@ function applyAlternativeToComponent(componentId, alternativeId, alternativeName
     // Update visual feedback
     updateComponentGlows();
     updateAffectedLegend();
+    updateMetrics();
 
     // Flash effect to confirm
     flashComponent(comp, alternative.color);
@@ -2296,30 +2338,49 @@ function hideInfoPanel(side) {
 }
 
 // Calculate mixed mode totals
+function getSelectedAlternative(componentId) {
+    const altId = selectedAlternatives[componentId];
+    if (!altId) return null;
+    const altData = ALTERNATIVES[componentId];
+    return altData?.options.find(a => a.id === altId) || null;
+}
+
+function getCurrentComponentAltId(componentId) {
+    const alt = getSelectedAlternative(componentId);
+    if (alt) return alt.id;
+    const provider = componentProviders[componentId] || 'cf';
+    return PROVIDER_COMPONENT_IDS[provider]?.[componentId] || `cf-${componentId}`;
+}
+
+function getComponentMetricsForSelection(componentId) {
+    const metricsMap = window.StackState?.COMPONENT_METRICS;
+    const alt = getSelectedAlternative(componentId);
+
+    if (alt && metricsMap && metricsMap[alt.id]) {
+        return metricsMap[alt.id];
+    }
+
+    const provider = componentProviders[componentId] || 'cf';
+    return getProviderComponentMetrics(componentId, provider);
+}
+
 function calculateMixedMetrics() {
     let totalCost = 0;
     let maxLatency = 0;
-
-    // Location map for providers
-    const locationMap = {
-        'cf': 300, 'gcp': 35, 'aws': 400, 'azure': 60,
-        'vercel': 200, 'netlify': 100, 'deno': 12,
-        'upstash': 200, 'turso': 50, 'neon': 15
-    };
-    let minLocations = 300;
+    let minLocations = Infinity;
 
     SWAPPABLE_COMPONENTS.forEach(id => {
-        const provider = componentProviders[id];
-        totalCost += COMPONENT_COSTS[id]?.[provider] || 0;
-        maxLatency = Math.max(maxLatency, COMPONENT_LATENCY[id]?.[provider] || 0);
-        minLocations = Math.min(minLocations, locationMap[provider] || 300);
+        const metrics = getComponentMetricsForSelection(id);
+        totalCost += metrics.cost || 0;
+        maxLatency = Math.max(maxLatency, metrics.latency || 0);
+        minLocations = Math.min(minLocations, metrics.locations ?? 0);
     });
 
     return {
         cost: totalCost === 0 ? '$0' : `$${totalCost}/mo`,
         latency: `${maxLatency}ms`,
         uptime: '99.97%',
-        locations: `${minLocations}+`
+        locations: `${minLocations === Infinity ? 0 : minLocations}+`
     };
 }
 
@@ -2345,32 +2406,6 @@ function updateMetrics() {
     if (cfCostEl) cfCostEl.textContent = '$0';
     if (cfLatencyEl) cfLatencyEl.textContent = '20ms';
     if (cfLocationsEl) cfLocationsEl.textContent = '300+';
-}
-
-// Calculate metrics for the current mixed configuration
-function calculateMixedLocations() {
-    // Find minimum edge locations among selected providers
-    const locationMap = {
-        'cf': 300,
-        'gcp': 35,
-        'aws': 400,
-        'azure': 60,
-        'vercel': 200,
-        'netlify': 100,
-        'deno': 12,
-        'upstash': 200,
-        'turso': 50,
-        'neon': 15
-    };
-
-    let minLocations = 300;
-    SWAPPABLE_COMPONENTS.forEach(id => {
-        const provider = componentProviders[id];
-        const locations = locationMap[provider] || 300;
-        minLocations = Math.min(minLocations, locations);
-    });
-
-    return minLocations + '+';
 }
 
 // Handle provider change - update components and metrics
@@ -2422,23 +2457,25 @@ function updateSingleComponentTexture(componentId) {
     const mesh = rightComponents.find(m => m.userData.id === componentId);
     if (!mesh) return;
 
-    const provider = componentProviders[componentId];
+    const selectedAlt = getSelectedAlternative(componentId);
+    const provider = componentProviders[componentId] || 'cf';
     const providerComp = PROVIDER_COMPONENTS[provider]?.[componentId];
-    if (!providerComp) return;
+    if (!providerComp && !selectedAlt) return;
 
     // Get display name (with prefix in mixed mode)
     const displayName = getComponentDisplayName(componentId);
     const role = getComponentRole(componentId);
+    const displayColor = getComponentDisplayColor(componentId) || mesh.userData.color;
 
     // Regenerate texture with icon
-    const { texture, canvas } = createLabelTexture(displayName, providerComp.color, componentId, role);
+    const { texture, canvas } = createLabelTexture(displayName, displayColor, componentId, role);
 
     // Update ShaderMaterial uniform
     mesh.material.uniforms.cardTexture.value = texture;
-    mesh.material.uniforms.glowColor.value = new THREE.Color(providerComp.color);
+    mesh.material.uniforms.glowColor.value = new THREE.Color(displayColor);
     mesh.material.needsUpdate = true;
     mesh.userData.name = displayName;
-    mesh.userData.color = providerComp.color;
+    mesh.userData.color = displayColor;
     mesh.userData.canvas = canvas;
 }
 
@@ -2519,12 +2556,24 @@ function getComponentDisplayName(componentId) {
         return comp ? comp.name : componentId;
     }
 
+    const selectedAlt = getSelectedAlternative(componentId);
+    if (selectedAlt) {
+        return selectedAlt.name || componentId;
+    }
+
     const provider = isMixedMode ? componentProviders[componentId] : currentProvider;
     const providerComp = PROVIDER_COMPONENTS[provider]?.[componentId];
     if (!providerComp) return componentId;
 
     // Names now include full vendor + product (e.g., "Cloudflare Workers", "AWS Lambda@Edge")
     return providerComp.name;
+}
+
+function getComponentDisplayColor(componentId) {
+    const selectedAlt = getSelectedAlternative(componentId);
+    if (selectedAlt && selectedAlt.color) return selectedAlt.color;
+    const provider = isMixedMode ? componentProviders[componentId] : currentProvider;
+    return PROVIDER_COMPONENTS[provider]?.[componentId]?.color || null;
 }
 
 // ============================================
@@ -2807,17 +2856,28 @@ window.initScene = function() {
     }
 
     if (!registerEventBusListeners()) {
-        const checkInterval = setInterval(() => {
+        let delayMs = 100;
+        const maxDelayMs = 2000;
+
+        const retryRegister = () => {
             if (registerEventBusListeners()) {
-                clearInterval(checkInterval);
+                return;
             }
-        }, 100);
+            delayMs = Math.min(maxDelayMs, Math.round(delayMs * 1.4));
+            setTimeout(retryRegister, delayMs);
+        };
+
+        setTimeout(retryRegister, delayMs);
     }
 
     console.log('Three.js scene initialized successfully');
 };
 
 function onResize() {
+    if (isComparisonMode) {
+        onComparisonResize();
+        return;
+    }
     const width = window.innerWidth;
     const height = window.innerHeight;
     const adjustedHeight = height - HEADER_HEIGHT_PX;
@@ -3028,8 +3088,7 @@ function updateRightSideTextures() {
         if (SWAPPABLE_COMPONENTS.includes(compId)) {
             const displayName = getComponentDisplayName(compId);
             const role = getComponentRole(compId);
-            const provider = componentProviders[compId] || 'cf';
-            const color = PROVIDER_COLORS[provider] || mesh.userData.color;
+            const color = getComponentDisplayColor(compId) || mesh.userData.color;
 
             // Update texture with new name
             const { texture } = createLabelTexture(displayName, color, compId, role);

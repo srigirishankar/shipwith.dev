@@ -6,7 +6,7 @@
  * - COMPONENTS array
  * - CONNECTIONS array
  * - PROVIDER_COMPONENTS mapping
- * - PROVIDER_METRICS
+ *
  *
  * Run with: bun test www/tests/scene-data.test.js
  */
@@ -519,22 +519,8 @@ describe('Provider Data in scene.js', () => {
             'PROVIDER_COMPONENTS should be defined');
     });
 
-    test('PROVIDER_METRICS is defined', () => {
-        assert(sceneContent.includes('const PROVIDER_METRICS = {'),
-            'PROVIDER_METRICS should be defined');
-    });
 
-    test('Provider metrics have cost, latency, uptime, locations', () => {
-        // Check structure in source
-        assert(sceneContent.includes("cost: '$0'") || sceneContent.includes('cost: 0'),
-            'Provider should have cost');
-        assert(sceneContent.includes("latency: '20ms'") || sceneContent.includes('latency: 20'),
-            'Provider should have latency');
-        assert(sceneContent.includes("uptime: '99.99%'") || sceneContent.includes('uptime: 99.99'),
-            'Provider should have uptime');
-        assert(sceneContent.includes("locations: '300+'") || sceneContent.includes('locations: 300'),
-            'Provider should have locations');
-    });
+    // Provider metrics now live in stack-state.js (StackState) and are not duplicated here.
 });
 
 // ============================================

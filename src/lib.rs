@@ -32,6 +32,10 @@ impl App {
 
     #[wasm_bindgen]
     pub fn start(&mut self) -> Result<(), JsValue> {
+        if self.initialized {
+            log::warn!("Application already started; skipping re-init");
+            return Ok(());
+        }
         log::info!("Starting application...");
 
         // Initialize Three.js scene
