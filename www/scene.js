@@ -1060,6 +1060,96 @@ function drawComponentIcon(ctx, componentId, x, y, size) {
     ctx.restore();
 }
 
+// ============================================
+// PORT INDICATORS: Draw colored dots at card edges
+// Position mapping for 512x512 canvas
+// ============================================
+const PORT_POSITIONS = {
+    'top': { x: 256, y: 35 },
+    'bottom': { x: 256, y: 477 },
+    'left': { x: 35, y: 256 },
+    'right': { x: 477, y: 256 },
+    'bottom-left': { x: 128, y: 477 },
+    'bottom-right': { x: 384, y: 477 },
+    'top-left': { x: 128, y: 35 },
+    'top-right': { x: 384, y: 35 }
+};
+
+// Get port color from PORT_TYPES by type id
+function getPortColor(typeId) {
+    if (!window.GraphModel?.PORT_TYPES) return '#888888';
+    for (const pt of Object.values(window.GraphModel.PORT_TYPES)) {
+        if (pt.id === typeId) return pt.color;
+    }
+    return '#888888';
+}
+
+// Draw port indicator circles on component card
+function drawPortIndicators(ctx, componentId) {
+    if (!window.GraphModel?.COMPONENT_PORTS) return;
+
+    const portDef = window.GraphModel.COMPONENT_PORTS[componentId];
+    if (!portDef) return;
+
+    const PORT_RADIUS = 8;
+
+    // Draw input ports
+    if (portDef.inputs) {
+        portDef.inputs.forEach(port => {
+            const pos = PORT_POSITIONS[port.position];
+            if (!pos) return;
+
+            const color = getPortColor(port.type);
+
+            // Outer glow
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, PORT_RADIUS + 3, 0, Math.PI * 2);
+            ctx.fillStyle = color + '40'; // 25% opacity
+            ctx.fill();
+
+            // Main circle
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, PORT_RADIUS, 0, Math.PI * 2);
+            ctx.fillStyle = color;
+            ctx.fill();
+
+            // Inner highlight
+            ctx.beginPath();
+            ctx.arc(pos.x - 2, pos.y - 2, PORT_RADIUS * 0.4, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255,255,255,0.3)';
+            ctx.fill();
+        });
+    }
+
+    // Draw output ports
+    if (portDef.outputs) {
+        portDef.outputs.forEach(port => {
+            const pos = PORT_POSITIONS[port.position];
+            if (!pos) return;
+
+            const color = getPortColor(port.type);
+
+            // Outer glow
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, PORT_RADIUS + 3, 0, Math.PI * 2);
+            ctx.fillStyle = color + '40'; // 25% opacity
+            ctx.fill();
+
+            // Main circle
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, PORT_RADIUS, 0, Math.PI * 2);
+            ctx.fillStyle = color;
+            ctx.fill();
+
+            // Inner highlight
+            ctx.beginPath();
+            ctx.arc(pos.x - 2, pos.y - 2, PORT_RADIUS * 0.4, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255,255,255,0.3)';
+            ctx.fill();
+        });
+    }
+}
+
 // Create a canvas texture with label and icon (Modern smoky glass effect)
 // Two-line layout: role (what it does) + name (vendor product)
 function createLabelTexture(name, color, componentId, role = null) {
@@ -1141,6 +1231,9 @@ function createLabelTexture(name, color, componentId, role = null) {
         ctx.fillText(name, 256, 320);
     }
 
+    // === PORT INDICATORS (colored dots at card edges) ===
+    drawPortIndicators(ctx, componentId);
+
     const texture = new THREE.CanvasTexture(canvas);
     texture.needsUpdate = true;
     return { texture, canvas };
@@ -1166,6 +1259,61 @@ function createGlassCardMaterial(canvasTexture, color) {
     });
 }
 
+// ============================================
+// PORT HITBOXES: Calculate 3D offsets for raycasting
+// Card size is 1.8 x 1.8 in world units
+// ============================================
+const PORT_3D_OFFSETS = {
+    'top': { x: 0, y: 0.9, z: 0 },
+    'bottom': { x: 0, y: -0.9, z: 0 },
+    'left': { x: -0.9, y: 0, z: 0 },
+    'right': { x: 0.9, y: 0, z: 0 },
+    'bottom-left': { x: -0.45, y: -0.9, z: 0 },
+    'bottom-right': { x: 0.45, y: -0.9, z: 0 },
+    'top-left': { x: -0.45, y: 0.9, z: 0 },
+    'top-right': { x: 0.45, y: 0.9, z: 0 }
+};
+
+// Build port hitbox data for a component
+function buildPortHitboxes(componentId) {
+    if (!window.GraphModel?.COMPONENT_PORTS) return [];
+
+    const portDef = window.GraphModel.COMPONENT_PORTS[componentId];
+    if (!portDef) return [];
+
+    const ports = [];
+
+    // Add input ports
+    if (portDef.inputs) {
+        portDef.inputs.forEach((port, idx) => {
+            const offset = PORT_3D_OFFSETS[port.position] || { x: 0, y: 0, z: 0 };
+            ports.push({
+                id: `${componentId}-in-${idx}`,
+                type: port.type,
+                position: port.position,
+                worldOffset: { ...offset },
+                isInput: true
+            });
+        });
+    }
+
+    // Add output ports
+    if (portDef.outputs) {
+        portDef.outputs.forEach((port, idx) => {
+            const offset = PORT_3D_OFFSETS[port.position] || { x: 0, y: 0, z: 0 };
+            ports.push({
+                id: `${componentId}-out-${idx}`,
+                type: port.type,
+                position: port.position,
+                worldOffset: { ...offset },
+                isInput: false
+            });
+        });
+    }
+
+    return ports;
+}
+
 // Create component mesh with glass shader
 function createComponent(comp) {
     const { texture, canvas } = createLabelTexture(comp.name, comp.color, comp.id, comp.role);
@@ -1179,12 +1327,14 @@ function createComponent(comp) {
     mesh.position.set(comp.pos.x, comp.pos.y, comp.pos.z);
     mesh.userData = {
         id: comp.id,
+        componentId: comp.id,  // Alias for consistency
         name: comp.name,
         role: comp.role,
         color: comp.color,
         canvas: canvas,  // Store for texture updates
         basePosition: { ...comp.pos },
-        explodedPosition: { ...comp.exploded }
+        explodedPosition: { ...comp.exploded },
+        ports: buildPortHitboxes(comp.id)  // Port hitboxes for raycasting
     };
 
     return mesh;
@@ -1206,13 +1356,15 @@ function createComponentWithOffset(comp, xOffset, overrideName, overrideColor) {
     mesh.position.set(comp.pos.x + xOffset, comp.pos.y, comp.pos.z);
     mesh.userData = {
         id: comp.id,
+        componentId: comp.id,  // Alias for consistency
         name: name,
         role: role,
         color: color,
         canvas: canvas,
         basePosition: { x: comp.pos.x + xOffset, y: comp.pos.y, z: comp.pos.z },
         explodedPosition: { x: comp.exploded.x + xOffset, y: comp.exploded.y, z: comp.exploded.z },
-        xOffset: xOffset  // Store for reference
+        xOffset: xOffset,  // Store for reference
+        ports: buildPortHitboxes(comp.id)  // Port hitboxes for raycasting
     };
 
     return mesh;

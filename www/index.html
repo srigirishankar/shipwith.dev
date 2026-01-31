@@ -318,6 +318,12 @@
     <!-- Feature panels will be injected here by each feature's JS -->
     <div id="feature-panels"></div>
 
+    <!-- Graph Model - Port types and spec classes for architecture builder -->
+    <script type="module">
+        import { PORT_TYPES, COMPONENT_PORTS, GraphSpec, NodeSpec, EdgeSpec, isValidConnection, getCompatibleInputs, COMPATIBLE_TYPES } from './graph-model.js';
+        window.GraphModel = { PORT_TYPES, COMPONENT_PORTS, GraphSpec, NodeSpec, EdgeSpec, isValidConnection, getCompatibleInputs, COMPATIBLE_TYPES };
+    </script>
+
     <script type="module">
         import init, { App } from './pkg/shipwith_dev.js';
 
