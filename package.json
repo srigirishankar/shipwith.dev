@@ -1,0 +1,8 @@
+{
+  "name": "shipwith",
+  "private": true,
+  "scripts": {
+    "test": "bun test",
+    "dev": "cd www && python -m http.server 8080"
+  }
+}
