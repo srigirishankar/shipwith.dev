@@ -716,42 +716,27 @@ function drawNodes() {
 
 function drawNode(node) {
     const { x, y } = node.position;
-    const w = node.width;
-    const h = node.height;
-    const halfW = w / 2;
-    const halfH = h / 2;
-    const radius = 12;
-
     const isSelected = canvasState.isNodeSelected(node.id);
+
+    // Get cached Path2D objects (created once, reused across frames)
+    const paths = getNodePaths(node);
 
     // Shadow
     nodesCtx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-    roundRect(nodesCtx, x - halfW + 4, y - halfH + 4, w, h, radius);
-    nodesCtx.fill();
+    nodesCtx.fill(paths.shadow);
 
     // Background
     nodesCtx.fillStyle = '#2a2a2a';
-    roundRect(nodesCtx, x - halfW, y - halfH, w, h, radius);
-    nodesCtx.fill();
+    nodesCtx.fill(paths.main);
 
     // Border
     nodesCtx.strokeStyle = isSelected ? '#3b82f6' : node.color;
     nodesCtx.lineWidth = isSelected ? 3 : 2;
-    roundRect(nodesCtx, x - halfW, y - halfH, w, h, radius);
-    nodesCtx.stroke();
+    nodesCtx.stroke(paths.main);
 
     // Color accent bar at top
     nodesCtx.fillStyle = node.color;
-    nodesCtx.beginPath();
-    nodesCtx.moveTo(x - halfW + radius, y - halfH);
-    nodesCtx.lineTo(x + halfW - radius, y - halfH);
-    nodesCtx.arcTo(x + halfW, y - halfH, x + halfW, y - halfH + radius, radius);
-    nodesCtx.lineTo(x + halfW, y - halfH + 10);
-    nodesCtx.lineTo(x - halfW, y - halfH + 10);
-    nodesCtx.lineTo(x - halfW, y - halfH + radius);
-    nodesCtx.arcTo(x - halfW, y - halfH, x - halfW + radius, y - halfH, radius);
-    nodesCtx.closePath();
-    nodesCtx.fill();
+    nodesCtx.fill(paths.accent);
 
     // Icon
     nodesCtx.font = '28px sans-serif';
@@ -892,7 +877,7 @@ function drawEdge(edge, expandedVp) {
     const isSelected = canvasState.isEdgeSelected(edge.id);
     const color = getTypeColor(sourcePort.type);
 
-    drawBezierWire(edgesCtx, start.x, start.y, end.x, end.y, color, isSelected);
+    drawBezierWire(edgesCtx, start.x, start.y, end.x, end.y, color, isSelected, false, edge);
 
     // Draw edge label at bezier midpoint
     const label = edge.config && edge.config.label;
@@ -964,6 +949,102 @@ function drawSnapCrosshairs() {
     c.restore();
 }
 
+// ─── Path2D caching helpers ──────────────────────────────────────
+
+/** Build a rounded-rect Path2D at the given absolute position. */
+function buildRoundRectPath(x, y, w, h, r) {
+    const p = new Path2D();
+    p.moveTo(x + r, y);
+    p.lineTo(x + w - r, y);
+    p.arcTo(x + w, y, x + w, y + r, r);
+    p.lineTo(x + w, y + h - r);
+    p.arcTo(x + w, y + h, x + w - r, y + h, r);
+    p.lineTo(x + r, y + h);
+    p.arcTo(x, y + h, x, y + h - r, r);
+    p.lineTo(x, y + r);
+    p.arcTo(x, y, x + r, y, r);
+    p.closePath();
+    return p;
+}
+
+/** Build the top accent-bar Path2D (top edge with rounded top corners). */
+function buildAccentBarPath(x, y, halfW, halfH, radius) {
+    const p = new Path2D();
+    p.moveTo(x - halfW + radius, y - halfH);
+    p.lineTo(x + halfW - radius, y - halfH);
+    p.arcTo(x + halfW, y - halfH, x + halfW, y - halfH + radius, radius);
+    p.lineTo(x + halfW, y - halfH + 10);
+    p.lineTo(x - halfW, y - halfH + 10);
+    p.lineTo(x - halfW, y - halfH + radius);
+    p.arcTo(x - halfW, y - halfH, x - halfW + radius, y - halfH, radius);
+    p.closePath();
+    return p;
+}
+
+/**
+ * Get (or create) cached Path2D objects for a node.
+ * Returns { main, shadow, accent }.
+ * Invalidated when position or size changes.
+ */
+function getNodePaths(node) {
+    const key = `${Math.round(node.position.x*10)/10}:${Math.round(node.position.y*10)/10}:${node.width}:${node.height}`;
+    if (node._cachedPaths && node._cachedPathKey === key) {
+        return node._cachedPaths;
+    }
+
+    const { x, y } = node.position;
+    const w = node.width;
+    const h = node.height;
+    const halfW = w / 2;
+    const halfH = h / 2;
+    const radius = 12;
+
+    const main   = buildRoundRectPath(x - halfW, y - halfH, w, h, radius);
+    const shadow = buildRoundRectPath(x - halfW + 4, y - halfH + 4, w, h, radius);
+    const accent = buildAccentBarPath(x, y, halfW, halfH, radius);
+
+    const paths = { main, shadow, accent };
+    node._cachedPaths = paths;
+    node._cachedPathKey = key;
+    return paths;
+}
+
+/**
+ * Get (or create) a cached bezier Path2D + arrow Path2D for an edge.
+ * Returns { curve, arrow }.
+ * Invalidated when endpoints move.
+ */
+function getEdgePaths(edge, x1, y1, x2, y2) {
+    const key = `${Math.round(x1*10)/10}:${Math.round(y1*10)/10}:${Math.round(x2*10)/10}:${Math.round(y2*10)/10}`;
+    if (edge._cachedPaths && edge._cachedPathKey === key) {
+        return edge._cachedPaths;
+    }
+
+    const dy = Math.abs(y2 - y1);
+    const controlOffset = Math.max(30, dy * 0.5);
+
+    const cp1x = x1, cp1y = y1 + controlOffset;
+    const cp2x = x2, cp2y = y2 - controlOffset;
+
+    const curve = new Path2D();
+    curve.moveTo(x1, y1);
+    curve.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, x2, y2);
+
+    // Arrow at end (direction = tangent from last control point to endpoint)
+    const angle = Math.atan2(y2 - cp2y, x2 - cp2x);
+    const arrowSize = 8;
+    const arrow = new Path2D();
+    arrow.moveTo(x2, y2);
+    arrow.lineTo(x2 - arrowSize * Math.cos(angle - Math.PI / 6), y2 - arrowSize * Math.sin(angle - Math.PI / 6));
+    arrow.lineTo(x2 - arrowSize * Math.cos(angle + Math.PI / 6), y2 - arrowSize * Math.sin(angle + Math.PI / 6));
+    arrow.closePath();
+
+    const paths = { curve, arrow };
+    edge._cachedPaths = paths;
+    edge._cachedPathKey = key;
+    return paths;
+}
+
 // ─── Shared drawing utilities (take context parameter) ───────────
 
 function drawEdgeLabel(c, label, x, y) {
@@ -1009,18 +1090,32 @@ function drawEdgeLabel(c, label, x, y) {
     c.restore();
 }
 
-function drawBezierWire(c, x1, y1, x2, y2, color, isSelected = false, isDashed = false) {
-    const dy = Math.abs(y2 - y1);
-    const controlOffset = Math.max(30, dy * 0.5);
+function drawBezierWire(c, x1, y1, x2, y2, color, isSelected = false, isDashed = false, edge = null) {
+    // Use cached Path2D when an edge object is provided (persistent edges).
+    // Wire preview (edge === null) builds paths each frame (transient).
+    let curvePath, arrowPath;
 
-    const cp1x = x1;
-    const cp1y = y1 + controlOffset;
-    const cp2x = x2;
-    const cp2y = y2 - controlOffset;
+    if (edge) {
+        const paths = getEdgePaths(edge, x1, y1, x2, y2);
+        curvePath = paths.curve;
+        arrowPath = paths.arrow;
+    } else {
+        const dy = Math.abs(y2 - y1);
+        const controlOffset = Math.max(30, dy * 0.5);
+        const cp2y = y2 - controlOffset;
 
-    c.beginPath();
-    c.moveTo(x1, y1);
-    c.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, x2, y2);
+        curvePath = new Path2D();
+        curvePath.moveTo(x1, y1);
+        curvePath.bezierCurveTo(x1, y1 + controlOffset, x2, cp2y, x2, y2);
+
+        const angle = Math.atan2(y2 - cp2y, 0); // cp2x === x2, so dx is always 0
+        const arrowSize = 8;
+        arrowPath = new Path2D();
+        arrowPath.moveTo(x2, y2);
+        arrowPath.lineTo(x2 - arrowSize * Math.cos(angle - Math.PI / 6), y2 - arrowSize * Math.sin(angle - Math.PI / 6));
+        arrowPath.lineTo(x2 - arrowSize * Math.cos(angle + Math.PI / 6), y2 - arrowSize * Math.sin(angle + Math.PI / 6));
+        arrowPath.closePath();
+    }
 
     c.strokeStyle = color;
     c.lineWidth = isSelected ? 4 : 2.5;
@@ -1031,34 +1126,12 @@ function drawBezierWire(c, x1, y1, x2, y2, color, isSelected = false, isDashed =
         c.setLineDash([]);
     }
 
-    c.stroke();
+    c.stroke(curvePath);
     c.setLineDash([]);
 
     // Arrow at end
-    const angle = Math.atan2(y2 - cp2y, x2 - cp2x);
-    const arrowSize = 8;
-
-    c.beginPath();
-    c.moveTo(x2, y2);
-    c.lineTo(x2 - arrowSize * Math.cos(angle - Math.PI / 6), y2 - arrowSize * Math.sin(angle - Math.PI / 6));
-    c.lineTo(x2 - arrowSize * Math.cos(angle + Math.PI / 6), y2 - arrowSize * Math.sin(angle + Math.PI / 6));
-    c.closePath();
     c.fillStyle = color;
-    c.fill();
-}
-
-function roundRect(c, x, y, w, h, r) {
-    c.beginPath();
-    c.moveTo(x + r, y);
-    c.lineTo(x + w - r, y);
-    c.arcTo(x + w, y, x + w, y + r, r);
-    c.lineTo(x + w, y + h - r);
-    c.arcTo(x + w, y + h, x + w - r, y + h, r);
-    c.lineTo(x + r, y + h);
-    c.arcTo(x, y + h, x, y + h - r, r);
-    c.lineTo(x, y + r);
-    c.arcTo(x, y, x + r, y, r);
-    c.closePath();
+    c.fill(arrowPath);
 }
 
 // ─── Exports (backward compat) ──────────────────────────────────
