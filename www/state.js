@@ -10,6 +10,21 @@ import {
     getTypeColor
 } from './component-specs.js';
 
+// Deep merge helper: recursively merges overrides into defaults,
+// using nullish coalescing so null/undefined values don't overwrite defaults.
+function mergeConfig(defaults, overrides) {
+    if (!overrides) return { ...defaults };
+    const result = {};
+    for (const key of Object.keys(defaults)) {
+        if (overrides[key] != null && typeof overrides[key] === 'object' && !Array.isArray(overrides[key])) {
+            result[key] = mergeConfig(defaults[key], overrides[key]);
+        } else {
+            result[key] = overrides[key] ?? defaults[key];
+        }
+    }
+    return result;
+}
+
 // Canvas state singleton
 class CanvasState {
     constructor() {
@@ -357,27 +372,17 @@ class CanvasState {
             node.description = spec.description;
             node.category = spec.category;
 
-            // Restore config (merge with defaults for backward compat)
+            // Restore config (deep merge with defaults, null values won't overwrite)
             if (n.config) {
-                node.config = {
-                    capacity: { ...node.config.capacity, ...n.config.capacity },
-                    scaling: { ...node.config.scaling, ...n.config.scaling },
-                    reliability: { ...node.config.reliability, ...n.config.reliability },
-                    cost: { ...node.config.cost, ...n.config.cost },
-                    latency: { ...node.config.latency, ...n.config.latency },
-                };
+                node.config = mergeConfig(node.config, n.config);
             }
 
-            // Restore provider
-            if (n.provider) {
-                node.provider = { ...node.provider, ...n.provider };
-            } else {
-                node.provider = {
-                    id: spec.metadata?.provider || null,
-                    name: spec.name,
-                    alternatives: spec.metadata?.alternatives || [],
-                };
-            }
+            // Restore provider (always derive from spec when fields are missing)
+            node.provider = {
+                id: n.provider?.id ?? spec.metadata?.provider ?? null,
+                name: n.provider?.name ?? spec.name,
+                alternatives: n.provider?.alternatives ?? spec.metadata?.alternatives ?? [],
+            };
 
             this.graph.addNode(node);
         }
@@ -387,9 +392,14 @@ class CanvasState {
             edge.id = e.id;
             edge.label = e.label || null;
 
-            // Restore edge config
+            // Restore edge config (deep merge preserves retryPolicy nested fields)
             if (e.config) {
-                edge.config = { ...edge.config, ...e.config };
+                edge.config = {
+                    protocol: e.config.protocol ?? edge.config.protocol,
+                    sync: e.config.sync ?? edge.config.sync,
+                    latencyMs: e.config.latencyMs ?? edge.config.latencyMs,
+                    retryPolicy: { ...edge.config.retryPolicy, ...(e.config.retryPolicy || {}) },
+                };
             }
 
             // Restore port type info
