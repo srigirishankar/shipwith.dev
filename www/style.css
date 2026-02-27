@@ -166,16 +166,22 @@ body {
     overflow: hidden;
 }
 
-#canvas {
+.canvas-layer {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    z-index: var(--z-canvas);
 }
 
-#canvas.drop-active {
+#layer-grid    { z-index: 1; }
+#layer-edges   { z-index: 2; }
+#layer-nodes   { z-index: 3; }
+#layer-overlay { z-index: 4; pointer-events: none; }
+
+#layer-nodes   { pointer-events: auto; }
+
+#canvas-container.drop-active {
     outline: 3px solid var(--cf-orange);
     outline-offset: -3px;
 }

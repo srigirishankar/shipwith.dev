@@ -1,11 +1,22 @@
 // Canvas rendering and interaction for Visual Architecture Canvas
-// Handles pan, zoom, grid, and orchestrates rendering of nodes/wires
+// Multi-layer canvas: grid, edges, nodes, overlay
+// Each layer has independent dirty-flag rendering
 
 import { canvasState } from './state.js';
 import { getComponentSpec, isTypeCompatible, getTypeColor } from './component-specs.js';
 
-let canvas, ctx;
+// 4 canvas/context pairs
+let gridCanvas, gridCtx;
+let edgesCanvas, edgesCtx;
+let nodesCanvas, nodesCtx;
+let overlayCanvas, overlayCtx;
+
 let animationFrameId = null;
+
+// Dirty flags (overlay always redraws)
+let gridDirty = true;
+let edgesDirty = true;
+let nodesDirty = true;
 
 // Grid settings
 const GRID_SIZE = 40;
@@ -20,55 +31,104 @@ let lastMouseX = 0;
 let lastMouseY = 0;
 let hoveredPort = null;
 
-// Initialize canvas
-export function initCanvas(canvasElement) {
-    canvas = canvasElement;
-    ctx = canvas.getContext('2d');
+// ─── Dirty-flag helpers ──────────────────────────────────────────
+
+function markAllDirty() {
+    gridDirty = true;
+    edgesDirty = true;
+    nodesDirty = true;
+}
+
+function markNodesDirty() {
+    nodesDirty = true;
+}
+
+function markEdgesDirty() {
+    edgesDirty = true;
+}
+
+function markNodesAndEdgesDirty() {
+    nodesDirty = true;
+    edgesDirty = true;
+}
+
+// ─── Initialization ──────────────────────────────────────────────
+
+export function initCanvas(containerElement) {
+    gridCanvas = document.getElementById('layer-grid');
+    edgesCanvas = document.getElementById('layer-edges');
+    nodesCanvas = document.getElementById('layer-nodes');
+    overlayCanvas = document.getElementById('layer-overlay');
+
+    gridCtx = gridCanvas.getContext('2d');
+    edgesCtx = edgesCanvas.getContext('2d');
+    nodesCtx = nodesCanvas.getContext('2d');
+    overlayCtx = overlayCanvas.getContext('2d');
 
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
 
-    // Center the view initially
-    canvasState.pan.x = canvas.width / 2;
-    canvasState.pan.y = canvas.height / 2;
+    // Center the view initially (use nodesCanvas for dimensions, all are same size)
+    canvasState.pan.x = nodesCanvas.width / (window.devicePixelRatio || 1) / 2;
+    canvasState.pan.y = nodesCanvas.height / (window.devicePixelRatio || 1) / 2;
 
     setupEventListeners();
+
+    // Subscribe to canvasState changes to auto-mark dirty flags
+    canvasState.subscribe(() => {
+        markNodesAndEdgesDirty();
+    });
+
+    markAllDirty();
     startRenderLoop();
 
-    return { canvas, ctx };
+    return { canvas: nodesCanvas, ctx: nodesCtx };
 }
 
 function resizeCanvas() {
     const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
+    const layers = [
+        { canvas: gridCanvas, ctx: gridCtx },
+        { canvas: edgesCanvas, ctx: edgesCtx },
+        { canvas: nodesCanvas, ctx: nodesCtx },
+        { canvas: overlayCanvas, ctx: overlayCtx },
+    ];
 
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
+    // Use nodesCanvas for rect (all layers are same size via CSS)
+    const rect = nodesCanvas.getBoundingClientRect();
 
-    ctx.scale(dpr, dpr);
+    for (const layer of layers) {
+        layer.canvas.width = rect.width * dpr;
+        layer.canvas.height = rect.height * dpr;
+        layer.ctx.scale(dpr, dpr);
+        layer.canvas.style.width = rect.width + 'px';
+        layer.canvas.style.height = rect.height + 'px';
+    }
 
-    canvas.style.width = rect.width + 'px';
-    canvas.style.height = rect.height + 'px';
+    markAllDirty();
 }
 
+// ─── Event listeners ─────────────────────────────────────────────
+// All events attach to nodesCanvas (the interactive layer, z-index: 3)
+
 function setupEventListeners() {
-    canvas.addEventListener('mousedown', handleMouseDown);
-    canvas.addEventListener('mousemove', handleMouseMove);
-    canvas.addEventListener('mouseup', handleMouseUp);
-    canvas.addEventListener('mouseleave', handleMouseUp);
-    canvas.addEventListener('wheel', handleWheel, { passive: false });
-    canvas.addEventListener('contextmenu', e => e.preventDefault());
+    nodesCanvas.addEventListener('mousedown', handleMouseDown);
+    nodesCanvas.addEventListener('mousemove', handleMouseMove);
+    nodesCanvas.addEventListener('mouseup', handleMouseUp);
+    nodesCanvas.addEventListener('mouseleave', handleMouseUp);
+    nodesCanvas.addEventListener('wheel', handleWheel, { passive: false });
+    nodesCanvas.addEventListener('contextmenu', e => e.preventDefault());
 
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
 
-    canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
-    canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
-    canvas.addEventListener('touchend', handleTouchEnd);
+    nodesCanvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+    nodesCanvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+    nodesCanvas.addEventListener('touchend', handleTouchEnd);
 }
 
 function handleMouseDown(e) {
-    const rect = canvas.getBoundingClientRect();
+    const rect = nodesCanvas.getBoundingClientRect();
     const screenX = e.clientX - rect.left;
     const screenY = e.clientY - rect.top;
     const world = canvasState.screenToWorld(screenX, screenY);
@@ -79,7 +139,7 @@ function handleMouseDown(e) {
     // Middle click or space+left click = pan
     if (e.button === 1 || (e.button === 0 && isSpaceDown)) {
         isPanning = true;
-        canvas.style.cursor = 'grabbing';
+        nodesCanvas.style.cursor = 'grabbing';
         return;
     }
 
@@ -119,7 +179,7 @@ function handleMouseDown(e) {
 
             canvasState.mode = 'dragging';
             canvasState.dragStart = { x: world.x, y: world.y };
-            canvas.style.cursor = 'move';
+            nodesCanvas.style.cursor = 'move';
             return;
         }
 
@@ -138,7 +198,7 @@ function handleMouseDown(e) {
 }
 
 function handleMouseMove(e) {
-    const rect = canvas.getBoundingClientRect();
+    const rect = nodesCanvas.getBoundingClientRect();
     const screenX = e.clientX - rect.left;
     const screenY = e.clientY - rect.top;
     const dx = screenX - lastMouseX;
@@ -150,6 +210,7 @@ function handleMouseMove(e) {
 
     if (isPanning) {
         canvasState.adjustPan(dx, dy);
+        markAllDirty();
     }
 
     if (canvasState.mode === 'dragging' && canvasState.dragStart) {
@@ -157,6 +218,7 @@ function handleMouseMove(e) {
         const worldDy = (world.y - canvasState.dragStart.y);
         canvasState.moveSelectedNodes(worldDx, worldDy);
         canvasState.dragStart = { x: world.x, y: world.y };
+        // moveSelectedNodes calls notify() which triggers our subscriber
     }
 
     if (canvasState.mode === 'connecting' && canvasState.wirePreview) {
@@ -175,6 +237,9 @@ function handleMouseMove(e) {
             canvasState.wirePreview.validTarget = null;
             canvasState.wirePreview.invalidTarget = null;
         }
+
+        // Wire preview changes need nodes dirty too (for port highlight)
+        markNodesDirty();
     }
 
     // Update cursor
@@ -183,13 +248,13 @@ function handleMouseMove(e) {
         const node = canvasState.getNodeAt(world.x, world.y);
 
         if (port) {
-            canvas.style.cursor = 'crosshair';
+            nodesCanvas.style.cursor = 'crosshair';
         } else if (node) {
-            canvas.style.cursor = 'pointer';
+            nodesCanvas.style.cursor = 'pointer';
         } else if (isSpaceDown) {
-            canvas.style.cursor = 'grab';
+            nodesCanvas.style.cursor = 'grab';
         } else {
-            canvas.style.cursor = 'default';
+            nodesCanvas.style.cursor = 'default';
         }
     }
 
@@ -200,7 +265,7 @@ function handleMouseMove(e) {
 function handleMouseUp(e) {
     if (isPanning) {
         isPanning = false;
-        canvas.style.cursor = isSpaceDown ? 'grab' : 'default';
+        nodesCanvas.style.cursor = isSpaceDown ? 'grab' : 'default';
     }
 
     // Complete wire connection
@@ -224,7 +289,7 @@ function handleMouseUp(e) {
 function handleWheel(e) {
     e.preventDefault();
 
-    const rect = canvas.getBoundingClientRect();
+    const rect = nodesCanvas.getBoundingClientRect();
     const screenX = e.clientX - rect.left;
     const screenY = e.clientY - rect.top;
 
@@ -232,19 +297,21 @@ function handleWheel(e) {
     const newZoom = canvasState.zoom * zoomFactor;
 
     canvasState.setZoom(newZoom, screenX, screenY);
+    markAllDirty();
 }
 
 function handleKeyDown(e) {
     if (e.code === 'Space' && !isSpaceDown) {
         isSpaceDown = true;
         if (canvasState.mode === 'idle') {
-            canvas.style.cursor = 'grab';
+            nodesCanvas.style.cursor = 'grab';
         }
     }
 
     if ((e.code === 'Delete' || e.code === 'Backspace') && !e.target.matches('input, textarea')) {
         if (canvasState.selectedNodeIds.size > 0 || canvasState.selectedEdgeIds.size > 0) {
             canvasState.deleteSelected();
+            // deleteSelected calls notify() which triggers our subscriber
         }
     }
 
@@ -261,7 +328,7 @@ function handleKeyUp(e) {
     if (e.code === 'Space') {
         isSpaceDown = false;
         if (!isPanning) {
-            canvas.style.cursor = 'default';
+            nodesCanvas.style.cursor = 'default';
         }
     }
 }
@@ -275,7 +342,7 @@ function handleTouchStart(e) {
 
     if (e.touches.length === 1) {
         const touch = e.touches[0];
-        const rect = canvas.getBoundingClientRect();
+        const rect = nodesCanvas.getBoundingClientRect();
         lastMouseX = touch.clientX - rect.left;
         lastMouseY = touch.clientY - rect.top;
 
@@ -303,7 +370,7 @@ function handleTouchMove(e) {
 
     if (e.touches.length === 1 && (isPanning || canvasState.mode === 'dragging')) {
         const touch = e.touches[0];
-        const rect = canvas.getBoundingClientRect();
+        const rect = nodesCanvas.getBoundingClientRect();
         const screenX = touch.clientX - rect.left;
         const screenY = touch.clientY - rect.top;
         const dx = screenX - lastMouseX;
@@ -311,6 +378,7 @@ function handleTouchMove(e) {
 
         if (isPanning) {
             canvasState.adjustPan(dx, dy);
+            markAllDirty();
         } else if (canvasState.mode === 'dragging') {
             const world = canvasState.screenToWorld(screenX, screenY);
             const worldDx = world.x - canvasState.dragStart.x;
@@ -327,11 +395,12 @@ function handleTouchMove(e) {
         const distance = Math.hypot(dx, dy);
         const scale = distance / touchStartDistance;
 
-        const rect = canvas.getBoundingClientRect();
+        const rect = nodesCanvas.getBoundingClientRect();
         const centerX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
         const centerY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
 
         canvasState.setZoom(touchStartZoom * scale, centerX, centerY);
+        markAllDirty();
     }
 }
 
@@ -341,7 +410,8 @@ function handleTouchEnd(e) {
     canvasState.dragStart = null;
 }
 
-// Get edge at position
+// ─── Edge hit testing ────────────────────────────────────────────
+
 function getEdgeAt(worldX, worldY) {
     const threshold = 10 / canvasState.zoom;
 
@@ -389,7 +459,8 @@ function bezierPoint(p0, p1, p2, p3, t) {
     return mt * mt * mt * p0 + 3 * mt * mt * t * p1 + 3 * mt * t * t * p2 + t * t * t * p3;
 }
 
-// Render loop
+// ─── Render loop ─────────────────────────────────────────────────
+
 function startRenderLoop() {
     function render() {
         draw();
@@ -405,30 +476,60 @@ export function stopRenderLoop() {
     }
 }
 
-// Main draw function
+// ─── Main draw function (dirty-flag gated) ───────────────────────
+
 function draw() {
-    const rect = canvas.getBoundingClientRect();
+    const rect = nodesCanvas.getBoundingClientRect();
     const width = rect.width;
     const height = rect.height;
 
-    ctx.fillStyle = '#1d1d1d';
-    ctx.fillRect(0, 0, width, height);
-
-    ctx.save();
-    ctx.translate(canvasState.pan.x, canvasState.pan.y);
-    ctx.scale(canvasState.zoom, canvasState.zoom);
-
-    drawGrid(width, height);
-    drawEdges();
-
-    if (canvasState.wirePreview) {
-        drawWirePreview();
+    // Grid layer
+    if (gridDirty) {
+        gridCtx.clearRect(0, 0, width, height);
+        gridCtx.fillStyle = '#1d1d1d';
+        gridCtx.fillRect(0, 0, width, height);
+        gridCtx.save();
+        gridCtx.translate(canvasState.pan.x, canvasState.pan.y);
+        gridCtx.scale(canvasState.zoom, canvasState.zoom);
+        drawGrid(width, height);
+        gridCtx.restore();
+        gridDirty = false;
     }
 
-    drawNodes();
+    // Edges layer
+    if (edgesDirty) {
+        edgesCtx.clearRect(0, 0, width, height);
+        edgesCtx.save();
+        edgesCtx.translate(canvasState.pan.x, canvasState.pan.y);
+        edgesCtx.scale(canvasState.zoom, canvasState.zoom);
+        drawEdges();
+        edgesCtx.restore();
+        edgesDirty = false;
+    }
 
-    ctx.restore();
+    // Nodes layer
+    if (nodesDirty) {
+        nodesCtx.clearRect(0, 0, width, height);
+        nodesCtx.save();
+        nodesCtx.translate(canvasState.pan.x, canvasState.pan.y);
+        nodesCtx.scale(canvasState.zoom, canvasState.zoom);
+        drawNodes();
+        nodesCtx.restore();
+        nodesDirty = false;
+    }
+
+    // Overlay layer (always redraws - wire preview)
+    overlayCtx.clearRect(0, 0, width, height);
+    if (canvasState.wirePreview) {
+        overlayCtx.save();
+        overlayCtx.translate(canvasState.pan.x, canvasState.pan.y);
+        overlayCtx.scale(canvasState.zoom, canvasState.zoom);
+        drawWirePreview();
+        overlayCtx.restore();
+    }
 }
+
+// ─── Grid drawing (uses gridCtx) ────────────────────────────────
 
 function drawGrid(width, height) {
     const { pan, zoom } = canvasState;
@@ -441,26 +542,28 @@ function drawGrid(width, height) {
     const startX = Math.floor(left / GRID_SIZE) * GRID_SIZE;
     const startY = Math.floor(top / GRID_SIZE) * GRID_SIZE;
 
-    ctx.lineWidth = 1 / zoom;
+    gridCtx.lineWidth = 1 / zoom;
 
     for (let x = startX; x <= right; x += GRID_SIZE) {
         const isAccent = Math.round(x / GRID_SIZE) % GRID_ACCENT_EVERY === 0;
-        ctx.strokeStyle = isAccent ? GRID_ACCENT_COLOR : GRID_COLOR;
-        ctx.beginPath();
-        ctx.moveTo(x, top);
-        ctx.lineTo(x, bottom);
-        ctx.stroke();
+        gridCtx.strokeStyle = isAccent ? GRID_ACCENT_COLOR : GRID_COLOR;
+        gridCtx.beginPath();
+        gridCtx.moveTo(x, top);
+        gridCtx.lineTo(x, bottom);
+        gridCtx.stroke();
     }
 
     for (let y = startY; y <= bottom; y += GRID_SIZE) {
         const isAccent = Math.round(y / GRID_SIZE) % GRID_ACCENT_EVERY === 0;
-        ctx.strokeStyle = isAccent ? GRID_ACCENT_COLOR : GRID_COLOR;
-        ctx.beginPath();
-        ctx.moveTo(left, y);
-        ctx.lineTo(right, y);
-        ctx.stroke();
+        gridCtx.strokeStyle = isAccent ? GRID_ACCENT_COLOR : GRID_COLOR;
+        gridCtx.beginPath();
+        gridCtx.moveTo(left, y);
+        gridCtx.lineTo(right, y);
+        gridCtx.stroke();
     }
 }
+
+// ─── Node drawing (uses nodesCtx) ───────────────────────────────
 
 function drawNodes() {
     for (const node of canvasState.graph.nodes.values()) {
@@ -479,49 +582,49 @@ function drawNode(node) {
     const isSelected = canvasState.isNodeSelected(node.id);
 
     // Shadow
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-    roundRect(ctx, x - halfW + 4, y - halfH + 4, w, h, radius);
-    ctx.fill();
+    nodesCtx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    roundRect(nodesCtx, x - halfW + 4, y - halfH + 4, w, h, radius);
+    nodesCtx.fill();
 
     // Background
-    ctx.fillStyle = '#2a2a2a';
-    roundRect(ctx, x - halfW, y - halfH, w, h, radius);
-    ctx.fill();
+    nodesCtx.fillStyle = '#2a2a2a';
+    roundRect(nodesCtx, x - halfW, y - halfH, w, h, radius);
+    nodesCtx.fill();
 
     // Border
-    ctx.strokeStyle = isSelected ? '#3b82f6' : node.color;
-    ctx.lineWidth = isSelected ? 3 : 2;
-    roundRect(ctx, x - halfW, y - halfH, w, h, radius);
-    ctx.stroke();
+    nodesCtx.strokeStyle = isSelected ? '#3b82f6' : node.color;
+    nodesCtx.lineWidth = isSelected ? 3 : 2;
+    roundRect(nodesCtx, x - halfW, y - halfH, w, h, radius);
+    nodesCtx.stroke();
 
     // Color accent bar at top
-    ctx.fillStyle = node.color;
-    ctx.beginPath();
-    ctx.moveTo(x - halfW + radius, y - halfH);
-    ctx.lineTo(x + halfW - radius, y - halfH);
-    ctx.arcTo(x + halfW, y - halfH, x + halfW, y - halfH + radius, radius);
-    ctx.lineTo(x + halfW, y - halfH + 10);
-    ctx.lineTo(x - halfW, y - halfH + 10);
-    ctx.lineTo(x - halfW, y - halfH + radius);
-    ctx.arcTo(x - halfW, y - halfH, x - halfW + radius, y - halfH, radius);
-    ctx.closePath();
-    ctx.fill();
+    nodesCtx.fillStyle = node.color;
+    nodesCtx.beginPath();
+    nodesCtx.moveTo(x - halfW + radius, y - halfH);
+    nodesCtx.lineTo(x + halfW - radius, y - halfH);
+    nodesCtx.arcTo(x + halfW, y - halfH, x + halfW, y - halfH + radius, radius);
+    nodesCtx.lineTo(x + halfW, y - halfH + 10);
+    nodesCtx.lineTo(x - halfW, y - halfH + 10);
+    nodesCtx.lineTo(x - halfW, y - halfH + radius);
+    nodesCtx.arcTo(x - halfW, y - halfH, x - halfW + radius, y - halfH, radius);
+    nodesCtx.closePath();
+    nodesCtx.fill();
 
     // Icon
-    ctx.font = '28px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(node.icon || '?', x, y - 8);
+    nodesCtx.font = '28px sans-serif';
+    nodesCtx.textAlign = 'center';
+    nodesCtx.textBaseline = 'middle';
+    nodesCtx.fillText(node.icon || '?', x, y - 8);
 
     // Role (line 1)
-    ctx.font = 'bold 12px Inter, sans-serif';
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(node.role || node.componentId, x, y + 25);
+    nodesCtx.font = 'bold 12px Inter, sans-serif';
+    nodesCtx.fillStyle = '#ffffff';
+    nodesCtx.fillText(node.role || node.componentId, x, y + 25);
 
     // Name (line 2)
-    ctx.font = 'italic 10px Inter, sans-serif';
-    ctx.fillStyle = '#a0a0a0';
-    ctx.fillText(node.name || '', x, y + 40);
+    nodesCtx.font = 'italic 10px Inter, sans-serif';
+    nodesCtx.fillStyle = '#a0a0a0';
+    nodesCtx.fillText(node.name || '', x, y + 40);
 
     // Draw ports
     drawPorts(node);
@@ -565,32 +668,34 @@ function drawPorts(node) {
 function drawPort(x, y, radius, color, isHovered, isValidTarget, isInvalidTarget) {
     // Outer ring for hover/valid/invalid state
     if (isHovered || isValidTarget || isInvalidTarget) {
-        ctx.beginPath();
-        ctx.arc(x, y, radius + 4, 0, Math.PI * 2);
+        nodesCtx.beginPath();
+        nodesCtx.arc(x, y, radius + 4, 0, Math.PI * 2);
         if (isValidTarget) {
-            ctx.fillStyle = 'rgba(16, 185, 129, 0.3)';
-            ctx.strokeStyle = '#10B981';
+            nodesCtx.fillStyle = 'rgba(16, 185, 129, 0.3)';
+            nodesCtx.strokeStyle = '#10B981';
         } else if (isInvalidTarget) {
-            ctx.fillStyle = 'rgba(239, 68, 68, 0.3)';
-            ctx.strokeStyle = '#EF4444';
+            nodesCtx.fillStyle = 'rgba(239, 68, 68, 0.3)';
+            nodesCtx.strokeStyle = '#EF4444';
         } else {
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-            ctx.strokeStyle = '#ffffff';
+            nodesCtx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+            nodesCtx.strokeStyle = '#ffffff';
         }
-        ctx.fill();
-        ctx.lineWidth = 2;
-        ctx.stroke();
+        nodesCtx.fill();
+        nodesCtx.lineWidth = 2;
+        nodesCtx.stroke();
     }
 
     // Port circle
-    ctx.beginPath();
-    ctx.arc(x, y, radius, 0, Math.PI * 2);
-    ctx.fillStyle = color;
-    ctx.fill();
-    ctx.strokeStyle = '#1d1d1d';
-    ctx.lineWidth = 2;
-    ctx.stroke();
+    nodesCtx.beginPath();
+    nodesCtx.arc(x, y, radius, 0, Math.PI * 2);
+    nodesCtx.fillStyle = color;
+    nodesCtx.fill();
+    nodesCtx.strokeStyle = '#1d1d1d';
+    nodesCtx.lineWidth = 2;
+    nodesCtx.stroke();
 }
+
+// ─── Edge drawing (uses edgesCtx) ───────────────────────────────
 
 function drawEdges() {
     for (const edge of canvasState.graph.edges.values()) {
@@ -617,8 +722,10 @@ function drawEdge(edge) {
     const isSelected = canvasState.isEdgeSelected(edge.id);
     const color = getTypeColor(sourcePort.type);
 
-    drawBezierWire(start.x, start.y, end.x, end.y, color, isSelected);
+    drawBezierWire(edgesCtx, start.x, start.y, end.x, end.y, color, isSelected);
 }
+
+// ─── Wire preview (uses overlayCtx) ─────────────────────────────
 
 function drawWirePreview() {
     const wp = canvasState.wirePreview;
@@ -630,10 +737,12 @@ function drawWirePreview() {
         color = '#EF4444';
     }
 
-    drawBezierWire(wp.startX, wp.startY, wp.endX, wp.endY, color, false, true);
+    drawBezierWire(overlayCtx, wp.startX, wp.startY, wp.endX, wp.endY, color, false, true);
 }
 
-function drawBezierWire(x1, y1, x2, y2, color, isSelected = false, isDashed = false) {
+// ─── Shared drawing utilities (take context parameter) ───────────
+
+function drawBezierWire(c, x1, y1, x2, y2, color, isSelected = false, isDashed = false) {
     const dy = Math.abs(y2 - y1);
     const controlOffset = Math.max(30, dy * 0.5);
 
@@ -642,53 +751,55 @@ function drawBezierWire(x1, y1, x2, y2, color, isSelected = false, isDashed = fa
     const cp2x = x2;
     const cp2y = y2 - controlOffset;
 
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, x2, y2);
+    c.beginPath();
+    c.moveTo(x1, y1);
+    c.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, x2, y2);
 
-    ctx.strokeStyle = color;
-    ctx.lineWidth = isSelected ? 4 : 2.5;
+    c.strokeStyle = color;
+    c.lineWidth = isSelected ? 4 : 2.5;
 
     if (isDashed) {
-        ctx.setLineDash([8, 4]);
+        c.setLineDash([8, 4]);
     } else {
-        ctx.setLineDash([]);
+        c.setLineDash([]);
     }
 
-    ctx.stroke();
-    ctx.setLineDash([]);
+    c.stroke();
+    c.setLineDash([]);
 
     // Arrow at end
     const angle = Math.atan2(y2 - cp2y, x2 - cp2x);
     const arrowSize = 8;
 
-    ctx.beginPath();
-    ctx.moveTo(x2, y2);
-    ctx.lineTo(x2 - arrowSize * Math.cos(angle - Math.PI / 6), y2 - arrowSize * Math.sin(angle - Math.PI / 6));
-    ctx.lineTo(x2 - arrowSize * Math.cos(angle + Math.PI / 6), y2 - arrowSize * Math.sin(angle + Math.PI / 6));
-    ctx.closePath();
-    ctx.fillStyle = color;
-    ctx.fill();
+    c.beginPath();
+    c.moveTo(x2, y2);
+    c.lineTo(x2 - arrowSize * Math.cos(angle - Math.PI / 6), y2 - arrowSize * Math.sin(angle - Math.PI / 6));
+    c.lineTo(x2 - arrowSize * Math.cos(angle + Math.PI / 6), y2 - arrowSize * Math.sin(angle + Math.PI / 6));
+    c.closePath();
+    c.fillStyle = color;
+    c.fill();
 }
 
-function roundRect(ctx, x, y, w, h, r) {
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + w - r, y);
-    ctx.arcTo(x + w, y, x + w, y + r, r);
-    ctx.lineTo(x + w, y + h - r);
-    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
-    ctx.lineTo(x + r, y + h);
-    ctx.arcTo(x, y + h, x, y + h - r, r);
-    ctx.lineTo(x, y + r);
-    ctx.arcTo(x, y, x + r, y, r);
-    ctx.closePath();
+function roundRect(c, x, y, w, h, r) {
+    c.beginPath();
+    c.moveTo(x + r, y);
+    c.lineTo(x + w - r, y);
+    c.arcTo(x + w, y, x + w, y + r, r);
+    c.lineTo(x + w, y + h - r);
+    c.arcTo(x + w, y + h, x + w - r, y + h, r);
+    c.lineTo(x + r, y + h);
+    c.arcTo(x, y + h, x, y + h - r, r);
+    c.lineTo(x, y + r);
+    c.arcTo(x, y, x + r, y, r);
+    c.closePath();
 }
+
+// ─── Exports (backward compat) ──────────────────────────────────
 
 export function getCanvas() {
-    return canvas;
+    return nodesCanvas;
 }
 
 export function getContext() {
-    return ctx;
+    return nodesCtx;
 }

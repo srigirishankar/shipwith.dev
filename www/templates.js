@@ -200,8 +200,8 @@ function centerViewOnGraph() {
   const centerX = (minX + maxX) / 2;
   const centerY = (minY + maxY) / 2;
 
-  const canvas = document.getElementById('canvas');
-  const rect = canvas?.getBoundingClientRect() || { width: 1200, height: 800 };
+  const container = document.getElementById('canvas-container');
+  const rect = container?.getBoundingClientRect() || { width: 1200, height: 800 };
 
   canvasState.pan.x = rect.width / 2 - centerX * canvasState.zoom;
   canvasState.pan.y = rect.height / 2 - centerY * canvasState.zoom;

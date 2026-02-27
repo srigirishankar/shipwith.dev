@@ -118,9 +118,9 @@ function handleDragEnd(e) {
     items.forEach(item => item.classList.remove('dragging'));
 
     // Remove drop zone highlight
-    const canvas = getCanvas();
-    if (canvas) {
-        canvas.classList.remove('drop-active');
+    const container = document.getElementById('canvas-container');
+    if (container) {
+        container.classList.remove('drop-active');
     }
 
     dragComponentId = null;
@@ -130,31 +130,32 @@ function handleDragOver(e) {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'copy';
 
-    const canvas = getCanvas();
-    if (canvas) {
-        canvas.classList.add('drop-active');
+    const container = document.getElementById('canvas-container');
+    if (container) {
+        container.classList.add('drop-active');
     }
 }
 
 function handleDragLeave(e) {
-    const canvas = getCanvas();
-    if (canvas) {
-        canvas.classList.remove('drop-active');
+    const container = document.getElementById('canvas-container');
+    if (container) {
+        container.classList.remove('drop-active');
     }
 }
 
 function handleDrop(e) {
     e.preventDefault();
 
-    const canvas = getCanvas();
-    if (canvas) {
-        canvas.classList.remove('drop-active');
+    const container = document.getElementById('canvas-container');
+    if (container) {
+        container.classList.remove('drop-active');
     }
 
     const componentId = e.dataTransfer.getData('text/plain');
     if (!componentId) return;
 
     // Get drop position in world coordinates
+    const canvas = getCanvas();
     const rect = canvas.getBoundingClientRect();
     const screenX = e.clientX - rect.left;
     const screenY = e.clientY - rect.top;

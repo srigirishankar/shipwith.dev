@@ -28,9 +28,12 @@
         <!-- Component Palette (Left Sidebar) -->
         <aside id="palette" class="palette"></aside>
 
-        <!-- Main Canvas -->
+        <!-- Main Canvas (4 layers) -->
         <main id="canvas-container">
-            <canvas id="canvas"></canvas>
+            <canvas id="layer-grid" class="canvas-layer"></canvas>
+            <canvas id="layer-edges" class="canvas-layer"></canvas>
+            <canvas id="layer-nodes" class="canvas-layer"></canvas>
+            <canvas id="layer-overlay" class="canvas-layer"></canvas>
         </main>
 
         <!-- Help Tooltip -->
@@ -59,9 +62,9 @@
 
         // Initialize the app
         function init() {
-            // Initialize canvas
-            const canvas = document.getElementById('canvas');
-            initCanvas(canvas);
+            // Initialize canvas (pass container, canvas.js finds 4 layers by ID)
+            const container = document.getElementById('canvas-container');
+            initCanvas(container);
 
             // Initialize palette
             const palette = document.getElementById('palette');
