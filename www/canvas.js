@@ -15,6 +15,13 @@ let container = null;
 let animationFrameId = null;
 let resizeObserver = null;
 
+// Cached device pixel ratio (updated in resizeCanvas)
+let cachedDpr = 1;
+
+// Module-level reusable viewport bounds (avoids per-frame allocations)
+const _vp = { left: 0, top: 0, right: 0, bottom: 0 };
+const _expandedVp = { left: 0, top: 0, right: 0, bottom: 0 };
+
 // Dirty flags (overlay always redraws)
 let gridDirty = true;
 let edgesDirty = true;
@@ -121,8 +128,8 @@ export function initCanvas(containerElement) {
     resizeObserver.observe(container);
 
     // Center the view initially (use nodesCanvas for dimensions, all are same size)
-    canvasState.pan.x = nodesCanvas.width / (window.devicePixelRatio || 1) / 2;
-    canvasState.pan.y = nodesCanvas.height / (window.devicePixelRatio || 1) / 2;
+    canvasState.pan.x = nodesCanvas.width / cachedDpr / 2;
+    canvasState.pan.y = nodesCanvas.height / cachedDpr / 2;
 
     setupEventListeners();
 
@@ -138,7 +145,8 @@ export function initCanvas(containerElement) {
 }
 
 function resizeCanvas() {
-    const dpr = window.devicePixelRatio || 1;
+    cachedDpr = window.devicePixelRatio || 1;
+    const dpr = cachedDpr;
     const rect = container.getBoundingClientRect();
 
     const canvases = [gridCanvas, edgesCanvas, nodesCanvas, overlayCanvas];
@@ -666,10 +674,42 @@ function drawGrid(width, height) {
     }
 }
 
+// ─── Viewport culling helpers ────────────────────────────────────
+
+/** Compute the visible viewport rectangle in world coordinates (mutates `out` to avoid allocations). */
+function getViewportBounds(out) {
+    const invZoom = 1 / canvasState.zoom;
+    out.left   = -canvasState.pan.x * invZoom;
+    out.top    = -canvasState.pan.y * invZoom;
+    out.right  = (nodesCanvas.width / cachedDpr - canvasState.pan.x) * invZoom;
+    out.bottom = (nodesCanvas.height / cachedDpr - canvasState.pan.y) * invZoom;
+    return out;
+}
+
+/** AABB intersection test: does the node overlap the viewport rect? */
+function isNodeVisible(node, vp) {
+    const margin = 12; // port radius + hover ring overhang
+    const halfW = node.width / 2 + margin;
+    const halfH = node.height / 2 + margin;
+    return (
+        node.position.x + halfW >= vp.left &&
+        node.position.x - halfW <= vp.right &&
+        node.position.y + halfH >= vp.top &&
+        node.position.y - halfH <= vp.bottom
+    );
+}
+
+/** Is a point inside the given (possibly expanded) viewport rect? */
+function isPointInRect(x, y, rect) {
+    return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+}
+
 // ─── Node drawing (uses nodesCtx) ───────────────────────────────
 
 function drawNodes() {
+    getViewportBounds(_vp);
     for (const node of canvasState.graph.nodes.values()) {
+        if (!isNodeVisible(node, _vp)) continue;
         drawNode(node);
     }
 }
@@ -801,12 +841,20 @@ function drawPort(x, y, radius, color, isHovered, isValidTarget, isInvalidTarget
 // ─── Edge drawing (uses edgesCtx) ───────────────────────────────
 
 function drawEdges() {
+    getViewportBounds(_vp);
+    // Small margin for label overhang only (bezier curve coverage handled via AABB in drawEdge)
+    const EDGE_MARGIN = 50;
+    _expandedVp.left   = _vp.left   - EDGE_MARGIN;
+    _expandedVp.top    = _vp.top    - EDGE_MARGIN;
+    _expandedVp.right  = _vp.right  + EDGE_MARGIN;
+    _expandedVp.bottom = _vp.bottom + EDGE_MARGIN;
+
     for (const edge of canvasState.graph.edges.values()) {
-        drawEdge(edge);
+        drawEdge(edge, _expandedVp);
     }
 }
 
-function drawEdge(edge) {
+function drawEdge(edge, expandedVp) {
     const sourceNode = canvasState.graph.nodes.get(edge.source.nodeId);
     const targetNode = canvasState.graph.nodes.get(edge.target.nodeId);
     if (!sourceNode || !targetNode) return;
@@ -821,6 +869,25 @@ function drawEdge(edge) {
 
     const start = canvasState.getPortWorldPosition(sourceNode, sourcePort.position, true);
     const end = canvasState.getPortWorldPosition(targetNode, targetPort.position, false);
+
+    // Viewport culling: AABB of the full bezier curve vs expanded viewport
+    if (expandedVp) {
+        const dy = Math.abs(end.y - start.y);
+        const controlOffset = Math.max(30, dy * 0.5);
+        // Compute bounding box from all 4 bezier control points
+        const cp1y = start.y + controlOffset;
+        const cp2y = end.y - controlOffset;
+        const minX = Math.min(start.x, end.x);
+        const maxX = Math.max(start.x, end.x);
+        const minY = Math.min(start.y, cp1y, cp2y, end.y);
+        const maxY = Math.max(start.y, cp1y, cp2y, end.y);
+
+        // AABB vs AABB rejection
+        if (maxX < expandedVp.left || minX > expandedVp.right ||
+            maxY < expandedVp.top  || minY > expandedVp.bottom) {
+            return;
+        }
+    }
 
     const isSelected = canvasState.isEdgeSelected(edge.id);
     const color = getTypeColor(sourcePort.type);
