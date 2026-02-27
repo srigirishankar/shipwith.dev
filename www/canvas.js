@@ -13,6 +13,7 @@ let overlayCanvas, overlayCtx;
 
 let container = null;
 let animationFrameId = null;
+let resizeObserver = null;
 
 // Dirty flags (overlay always redraws)
 let gridDirty = true;
@@ -73,6 +74,13 @@ export function initCanvas(containerElement) {
 
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
+
+    // Observe container size changes (e.g. properties panel open/close)
+    resizeObserver = new ResizeObserver(() => {
+        resizeCanvas();
+        markAllDirty();
+    });
+    resizeObserver.observe(container);
 
     // Center the view initially (use nodesCanvas for dimensions, all are same size)
     canvasState.pan.x = nodesCanvas.width / (window.devicePixelRatio || 1) / 2;
@@ -507,6 +515,12 @@ export function destroyCanvas() {
     window.removeEventListener('keydown', handleKeyDown);
     window.removeEventListener('keyup', handleKeyUp);
     window.removeEventListener('resize', resizeCanvas);
+
+    // Disconnect ResizeObserver
+    if (resizeObserver) {
+        resizeObserver.disconnect();
+        resizeObserver = null;
+    }
 }
 
 // ─── Main draw function (dirty-flag gated) ───────────────────────

@@ -187,6 +187,157 @@ body {
 }
 
 /* ============================================
+   PROPERTIES PANEL (RIGHT SIDEBAR)
+   ============================================ */
+
+.properties-panel {
+    width: 0;
+    min-width: 0;
+    height: 100vh;
+    background: var(--panel-bg);
+    border-left: 1px solid var(--border-subtle);
+    overflow-y: auto;
+    overflow-x: hidden;
+    transition: width 0.2s ease, min-width 0.2s ease;
+    z-index: var(--z-palette);
+}
+
+.properties-panel.open {
+    width: 320px;
+    min-width: 320px;
+}
+
+.properties-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.properties-icon {
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    font-size: 1.5rem;
+    flex-shrink: 0;
+}
+
+.properties-title {
+    flex: 1;
+    min-width: 0;
+}
+
+.properties-title h3 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.properties-title p {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin: 2px 0 0 0;
+}
+
+.properties-close {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 1.25rem;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+.properties-close:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.properties-section {
+    padding: 16px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.properties-section h4 {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 0 0 12px 0;
+}
+
+.properties-description {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin: 0;
+}
+
+.prop-field {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.prop-field label {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.prop-field input[type="number"],
+.prop-field select {
+    width: 100px;
+    padding: 4px 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-size: 0.8rem;
+}
+
+.prop-field input[type="number"]:focus,
+.prop-field select:focus {
+    outline: none;
+    border-color: var(--cf-orange);
+}
+
+.prop-field input[type="checkbox"] {
+    accent-color: var(--cf-orange);
+}
+
+.prop-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.properties-educational {
+    margin-top: 8px;
+}
+
+.properties-educational summary {
+    font-size: 0.8rem;
+    color: var(--cf-orange);
+    cursor: pointer;
+    user-select: none;
+}
+
+.properties-educational p {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin: 8px 0 0 0;
+}
+
+/* ============================================
    HELP TOOLTIP
    ============================================ */
 
@@ -272,6 +423,15 @@ body {
 @media (max-width: 768px) {
     :root {
         --palette-width: 180px;
+    }
+
+    .properties-panel.open {
+        position: fixed;
+        right: 0;
+        top: 0;
+        width: 100vw;
+        min-width: 100vw;
+        z-index: 100;
     }
 
     .palette-header {
