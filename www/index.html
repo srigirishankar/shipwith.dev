@@ -34,6 +34,13 @@
             <canvas id="layer-edges" class="canvas-layer"></canvas>
             <canvas id="layer-nodes" class="canvas-layer"></canvas>
             <canvas id="layer-overlay" class="canvas-layer"></canvas>
+
+            <!-- Toolbar -->
+            <div id="toolbar" class="toolbar">
+                <button id="btn-export" class="toolbar-btn" title="Export JSON">&#x2B73;</button>
+                <button id="btn-import" class="toolbar-btn" title="Import JSON">&#x2B71;</button>
+                <button id="btn-new" class="toolbar-btn" title="New Canvas">&#x2716;</button>
+            </div>
         </main>
 
         <!-- Properties Panel (Right Sidebar) -->
@@ -62,6 +69,7 @@
         import { initPalette, reconnectCanvas } from './palette.js';
         import { canvasState } from './state.js';
         import { initTemplates } from './templates.js';
+        import { initPersistence, exportGraph, importGraph, newCanvas } from './persistence.js';
         import { initProperties } from './properties.js';
 
         // Initialize the app
@@ -84,8 +92,19 @@
                 helpTooltip.classList.toggle('expanded');
             });
 
+            // Restore saved state from localStorage (must happen before templates
+            // so the modal only shows when the canvas is truly empty)
+            initPersistence();
+
             // Initialize templates (shows modal if canvas is empty)
             initTemplates();
+
+            // Wire toolbar buttons
+            document.getElementById('btn-export').addEventListener('click', exportGraph);
+            document.getElementById('btn-import').addEventListener('click', importGraph);
+            document.getElementById('btn-new').addEventListener('click', () => {
+                if (confirm('Clear canvas? This cannot be undone.')) newCanvas();
+            });
 
             // Initialize properties panel
             initProperties();

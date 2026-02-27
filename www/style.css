@@ -338,6 +338,41 @@ body {
 }
 
 /* ============================================
+   TOOLBAR
+   ============================================ */
+
+.toolbar {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    display: flex;
+    gap: 6px;
+    z-index: 10;
+}
+
+.toolbar-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: var(--panel-bg);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    font-size: 1rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+    backdrop-filter: blur(8px);
+}
+
+.toolbar-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* ============================================
    HELP TOOLTIP
    ============================================ */
 
