@@ -26,12 +26,50 @@ const GRID_COLOR = 'rgba(255, 255, 255, 0.05)';
 const GRID_ACCENT_COLOR = 'rgba(255, 255, 255, 0.1)';
 const GRID_ACCENT_EVERY = 5;
 
+// Snap-to-grid settings
+const SNAP_SIZE = GRID_SIZE; // snap aligns to grid
+let snapEnabled = true;
+
+// ─── Shared snap helper ──────────────────────────────────────────
+// Anchor-based snap: snap only the first selected node to the grid,
+// then apply the same delta to all others (preserves relative layout).
+function snapSelectedNodesToGrid(bypassSnap = false) {
+    if (!snapEnabled || bypassSnap) return;
+
+    const anchorId = canvasState.selectedNodeIds.values().next().value;
+    const anchor = canvasState.graph.nodes.get(anchorId);
+    if (!anchor) return;
+
+    const snappedX = Math.round(anchor.position.x / SNAP_SIZE) * SNAP_SIZE;
+    const snappedY = Math.round(anchor.position.y / SNAP_SIZE) * SNAP_SIZE;
+    const dx = snappedX - anchor.position.x;
+    const dy = snappedY - anchor.position.y;
+    if (dx === 0 && dy === 0) return;
+
+    for (const nodeId of canvasState.selectedNodeIds) {
+        const node = canvasState.graph.nodes.get(nodeId);
+        if (node) {
+            node.position.x += dx;
+            node.position.y += dy;
+        }
+    }
+
+    // Adjust dragStart to prevent desync / jitter
+    if (canvasState.dragStart) {
+        canvasState.dragStart.x += dx;
+        canvasState.dragStart.y += dy;
+    }
+
+    canvasState.notify();
+}
+
 // Context menu handler (named so it can be removed)
 function preventContextMenu(e) { e.preventDefault(); }
 
 // Interaction state
 let isPanning = false;
 let isSpaceDown = false;
+let isAltDown = false;
 let lastMouseX = 0;
 let lastMouseY = 0;
 let hoveredPort = null;
@@ -237,7 +275,9 @@ function handleMouseMove(e) {
         const worldDy = (world.y - canvasState.dragStart.y);
         canvasState.moveSelectedNodes(worldDx, worldDy);
         canvasState.dragStart = { x: world.x, y: world.y };
-        // moveSelectedNodes calls notify() which triggers our subscriber
+
+        // Anchor-based snap (Alt bypasses)
+        snapSelectedNodesToGrid(e.altKey);
     }
 
     if (canvasState.mode === 'connecting' && canvasState.wirePreview) {
@@ -320,6 +360,8 @@ function handleWheel(e) {
 }
 
 function handleKeyDown(e) {
+    if (e.code === 'AltLeft' || e.code === 'AltRight') isAltDown = true;
+
     if (e.code === 'Space' && !isSpaceDown) {
         isSpaceDown = true;
         if (canvasState.mode === 'idle') {
@@ -344,6 +386,8 @@ function handleKeyDown(e) {
 }
 
 function handleKeyUp(e) {
+    if (e.code === 'AltLeft' || e.code === 'AltRight') isAltDown = false;
+
     if (e.code === 'Space') {
         isSpaceDown = false;
         if (!isPanning) {
@@ -404,6 +448,9 @@ function handleTouchMove(e) {
             const worldDy = world.y - canvasState.dragStart.y;
             canvasState.moveSelectedNodes(worldDx, worldDy);
             canvasState.dragStart = { x: world.x, y: world.y };
+
+            // Anchor-based snap (touch has no Alt key, never bypass)
+            snapSelectedNodesToGrid(false);
         }
 
         lastMouseX = screenX;
@@ -565,13 +612,22 @@ function draw() {
         nodesDirty = false;
     }
 
-    // Overlay layer (always redraws - wire preview)
+    // Overlay layer (always redraws - wire preview + snap crosshair)
     overlayCtx.clearRect(0, 0, width, height);
     if (canvasState.wirePreview) {
         overlayCtx.save();
         overlayCtx.translate(canvasState.pan.x, canvasState.pan.y);
         overlayCtx.scale(canvasState.zoom, canvasState.zoom);
         drawWirePreview();
+        overlayCtx.restore();
+    }
+
+    // Snap crosshair guides during drag (hidden when Alt bypasses snap)
+    if (canvasState.mode === 'dragging' && snapEnabled && !isAltDown && canvasState.selectedNodeIds.size > 0) {
+        overlayCtx.save();
+        overlayCtx.translate(canvasState.pan.x, canvasState.pan.y);
+        overlayCtx.scale(canvasState.zoom, canvasState.zoom);
+        drawSnapCrosshairs();
         overlayCtx.restore();
     }
 }
@@ -785,6 +841,41 @@ function drawWirePreview() {
     }
 
     drawBezierWire(overlayCtx, wp.startX, wp.startY, wp.endX, wp.endY, color, false, true);
+}
+
+// ─── Snap crosshair guides (uses overlayCtx) ────────────────────
+
+function drawSnapCrosshairs() {
+    const c = overlayCtx;
+    const invZoom = 1 / canvasState.zoom;
+    c.save();
+    c.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    c.lineWidth = invZoom;
+    c.setLineDash([4 * invZoom, 4 * invZoom]);
+
+    const extent = 10000; // Always extends beyond viewport
+
+    for (const nodeId of canvasState.selectedNodeIds) {
+        const node = canvasState.graph.nodes.get(nodeId);
+        if (!node) continue;
+
+        const cx = node.position.x;
+        const cy = node.position.y;
+
+        // Vertical line through node center
+        c.beginPath();
+        c.moveTo(cx, cy - extent);
+        c.lineTo(cx, cy + extent);
+        c.stroke();
+
+        // Horizontal line through node center
+        c.beginPath();
+        c.moveTo(cx - extent, cy);
+        c.lineTo(cx + extent, cy);
+        c.stroke();
+    }
+
+    c.restore();
 }
 
 // ─── Shared drawing utilities (take context parameter) ───────────
