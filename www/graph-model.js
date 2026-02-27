@@ -182,7 +182,6 @@ export class EdgeSpec {
     this.id = crypto.randomUUID();
     this.source = { nodeId: sourceNodeId, portId: sourcePortId };
     this.target = { nodeId: targetNodeId, portId: targetPortId };
-    this.label = null;
     this.metadata = {};
 
     // Connection properties
@@ -191,6 +190,7 @@ export class EdgeSpec {
       sync: true,
       latencyMs: 1,
       retryPolicy: { maxRetries: 3, backoffMs: 100, backoffMultiplier: 2 },
+      label: null,
     };
   }
 }

@@ -117,7 +117,7 @@ describe('EdgeSpec', () => {
 
     test('has label=null by default', () => {
         const e = new EdgeSpec('n1', 'p1', 'n2', 'p2');
-        expect(e.label).toBeNull();
+        expect(e.config.label).toBeNull();
     });
 
     test('has empty metadata by default', () => {

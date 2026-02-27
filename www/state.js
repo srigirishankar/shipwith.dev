@@ -390,7 +390,6 @@ class CanvasState {
         for (const e of (json.edges || [])) {
             const edge = new EdgeSpec(e.source.nodeId, e.source.portId, e.target.nodeId, e.target.portId);
             edge.id = e.id;
-            edge.label = e.label || null;
 
             // Restore edge config (deep merge preserves retryPolicy nested fields)
             if (e.config) {
@@ -399,6 +398,7 @@ class CanvasState {
                     sync: e.config.sync ?? edge.config.sync,
                     latencyMs: e.config.latencyMs ?? edge.config.latencyMs,
                     retryPolicy: { ...edge.config.retryPolicy, ...(e.config.retryPolicy || {}) },
+                    label: e.config.label ?? e.label ?? edge.config.label,
                 };
             }
 
@@ -440,7 +440,6 @@ class CanvasState {
                 id: e.id,
                 source: e.source,
                 target: e.target,
-                label: e.label,
                 config: e.config,
             }))
         };

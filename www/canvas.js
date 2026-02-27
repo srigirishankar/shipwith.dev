@@ -826,6 +826,25 @@ function drawEdge(edge) {
     const color = getTypeColor(sourcePort.type);
 
     drawBezierWire(edgesCtx, start.x, start.y, end.x, end.y, color, isSelected);
+
+    // Draw edge label at bezier midpoint
+    const label = edge.config && edge.config.label;
+    if (label) {
+        const dy = Math.abs(end.y - start.y);
+        const controlOffset = Math.max(30, dy * 0.5);
+        const cp1x = start.x;
+        const cp1y = start.y + controlOffset;
+        const cp2x = end.x;
+        const cp2y = end.y - controlOffset;
+
+        // Cubic bezier at t=0.5
+        const t = 0.5;
+        const mt = 1 - t;
+        const mx = mt*mt*mt*start.x + 3*mt*mt*t*cp1x + 3*mt*t*t*cp2x + t*t*t*end.x;
+        const my = mt*mt*mt*start.y + 3*mt*mt*t*cp1y + 3*mt*t*t*cp2y + t*t*t*end.y;
+
+        drawEdgeLabel(edgesCtx, label, mx, my);
+    }
 }
 
 // ─── Wire preview (uses overlayCtx) ─────────────────────────────
@@ -879,6 +898,49 @@ function drawSnapCrosshairs() {
 }
 
 // ─── Shared drawing utilities (take context parameter) ───────────
+
+function drawEdgeLabel(c, label, x, y) {
+    // Skip unreadable labels when zoomed too far out
+    const effectiveSize = 11 * canvasState.zoom;
+    if (effectiveSize < 6) return;
+
+    c.save();
+    c.font = 'bold 11px Inter, sans-serif';
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+
+    // Truncate long labels for display
+    const displayLabel = label.length > 30 ? label.slice(0, 28) + '\u2026' : label;
+    const metrics = c.measureText(displayLabel);
+    const padX = 6;
+    const padY = 3;
+    const w = metrics.width + padX * 2;
+    const h = 16 + padY * 2;
+
+    // Background pill
+    c.fillStyle = 'rgba(29, 29, 29, 0.9)';
+    c.beginPath();
+    const r = h / 2;
+    c.moveTo(x - w / 2 + r, y - h / 2);
+    c.lineTo(x + w / 2 - r, y - h / 2);
+    c.arcTo(x + w / 2, y - h / 2, x + w / 2, y - h / 2 + r, r);
+    c.arcTo(x + w / 2, y + h / 2, x + w / 2 - r, y + h / 2, r);
+    c.lineTo(x - w / 2 + r, y + h / 2);
+    c.arcTo(x - w / 2, y + h / 2, x - w / 2, y + h / 2 - r, r);
+    c.arcTo(x - w / 2, y - h / 2, x - w / 2 + r, y - h / 2, r);
+    c.closePath();
+    c.fill();
+
+    // Border
+    c.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+    c.lineWidth = 1;
+    c.stroke();
+
+    // Text
+    c.fillStyle = '#ffffff';
+    c.fillText(displayLabel, x, y);
+    c.restore();
+}
 
 function drawBezierWire(c, x1, y1, x2, y2, color, isSelected = false, isDashed = false) {
     const dy = Math.abs(y2 - y1);
