@@ -11,6 +11,7 @@ let edgesCanvas, edgesCtx;
 let nodesCanvas, nodesCtx;
 let overlayCanvas, overlayCtx;
 
+let container = null;
 let animationFrameId = null;
 
 // Dirty flags (overlay always redraws)
@@ -23,6 +24,9 @@ const GRID_SIZE = 40;
 const GRID_COLOR = 'rgba(255, 255, 255, 0.05)';
 const GRID_ACCENT_COLOR = 'rgba(255, 255, 255, 0.1)';
 const GRID_ACCENT_EVERY = 5;
+
+// Context menu handler (named so it can be removed)
+function preventContextMenu(e) { e.preventDefault(); }
 
 // Interaction state
 let isPanning = false;
@@ -55,6 +59,8 @@ function markNodesAndEdgesDirty() {
 // ─── Initialization ──────────────────────────────────────────────
 
 export function initCanvas(containerElement) {
+    container = containerElement;
+
     gridCanvas = document.getElementById('layer-grid');
     edgesCanvas = document.getElementById('layer-edges');
     nodesCanvas = document.getElementById('layer-nodes');
@@ -87,23 +93,28 @@ export function initCanvas(containerElement) {
 
 function resizeCanvas() {
     const dpr = window.devicePixelRatio || 1;
-    const layers = [
-        { canvas: gridCanvas, ctx: gridCtx },
-        { canvas: edgesCanvas, ctx: edgesCtx },
-        { canvas: nodesCanvas, ctx: nodesCtx },
-        { canvas: overlayCanvas, ctx: overlayCtx },
-    ];
+    const rect = container.getBoundingClientRect();
 
-    // Use nodesCanvas for rect (all layers are same size via CSS)
-    const rect = nodesCanvas.getBoundingClientRect();
+    const canvases = [gridCanvas, edgesCanvas, nodesCanvas, overlayCanvas];
 
-    for (const layer of layers) {
-        layer.canvas.width = rect.width * dpr;
-        layer.canvas.height = rect.height * dpr;
-        layer.ctx.scale(dpr, dpr);
-        layer.canvas.style.width = rect.width + 'px';
-        layer.canvas.style.height = rect.height + 'px';
+    for (const cvs of canvases) {
+        cvs.width = rect.width * dpr;
+        cvs.height = rect.height * dpr;
+        cvs.style.width = rect.width + 'px';
+        cvs.style.height = rect.height + 'px';
     }
+
+    // Setting canvas.width/height resets context state, so re-acquire contexts
+    gridCtx = gridCanvas.getContext('2d');
+    edgesCtx = edgesCanvas.getContext('2d');
+    nodesCtx = nodesCanvas.getContext('2d');
+    overlayCtx = overlayCanvas.getContext('2d');
+
+    // Apply DPR scaling via setTransform (not cumulative like scale())
+    gridCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    edgesCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    nodesCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    overlayCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     markAllDirty();
 }
@@ -117,7 +128,7 @@ function setupEventListeners() {
     nodesCanvas.addEventListener('mouseup', handleMouseUp);
     nodesCanvas.addEventListener('mouseleave', handleMouseUp);
     nodesCanvas.addEventListener('wheel', handleWheel, { passive: false });
-    nodesCanvas.addEventListener('contextmenu', e => e.preventDefault());
+    nodesCanvas.addEventListener('contextmenu', preventContextMenu);
 
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
@@ -474,6 +485,28 @@ export function stopRenderLoop() {
         cancelAnimationFrame(animationFrameId);
         animationFrameId = null;
     }
+}
+
+export function destroyCanvas() {
+    stopRenderLoop();
+
+    // Remove canvas event listeners
+    if (nodesCanvas) {
+        nodesCanvas.removeEventListener('mousedown', handleMouseDown);
+        nodesCanvas.removeEventListener('mousemove', handleMouseMove);
+        nodesCanvas.removeEventListener('mouseup', handleMouseUp);
+        nodesCanvas.removeEventListener('mouseleave', handleMouseUp);
+        nodesCanvas.removeEventListener('wheel', handleWheel);
+        nodesCanvas.removeEventListener('contextmenu', preventContextMenu);
+        nodesCanvas.removeEventListener('touchstart', handleTouchStart);
+        nodesCanvas.removeEventListener('touchmove', handleTouchMove);
+        nodesCanvas.removeEventListener('touchend', handleTouchEnd);
+    }
+
+    // Remove window event listeners
+    window.removeEventListener('keydown', handleKeyDown);
+    window.removeEventListener('keyup', handleKeyUp);
+    window.removeEventListener('resize', resizeCanvas);
 }
 
 // ─── Main draw function (dirty-flag gated) ───────────────────────
