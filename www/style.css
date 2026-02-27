@@ -293,6 +293,7 @@ body {
 }
 
 .prop-field input[type="number"],
+.prop-field input[type="text"],
 .prop-field select {
     width: 100px;
     padding: 4px 8px;
@@ -303,7 +304,12 @@ body {
     font-size: 0.8rem;
 }
 
+.prop-field input[type="text"] {
+    width: 140px;
+}
+
 .prop-field input[type="number"]:focus,
+.prop-field input[type="text"]:focus,
 .prop-field select:focus {
     outline: none;
     border-color: var(--cf-orange);

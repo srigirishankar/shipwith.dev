@@ -4,26 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-shipwith.dev is an interactive architecture simulator for web apps. See how your tech choices affect what matters: cost, latency, uptime.
+shipwith.dev is a visual architecture builder for web apps. Users drag cloud components onto a canvas and connect typed ports to design their stack.
 
 ## Preferences
 
 - **Use Bun** over npm/npx (e.g., `bunx` instead of `npx`)
 - **Cloudflare** for hosting and edge compute
+- **Vanilla JS** - No frameworks, ES modules only
 
 ## Build Commands
 
 ```bash
-# Development build
-wasm-pack build --target web --dev
-
-# Production build
-wasm-pack build --target web --release
-
-# Full production build with asset packaging
-./build.sh
-
-# Local development server
+# Local development server (no build needed)
 cd www && python -m http.server 8080
 
 # Manual deployment to Cloudflare Pages
@@ -33,104 +25,230 @@ bunx wrangler deploy
 ## Architecture
 
 **Tech Stack:**
-- Rust compiled to WebAssembly (wasm-pack, wasm-bindgen)
-- Three.js for 3D rendering (via JS interop from Rust)
+- Vanilla JavaScript with ES modules
+- Canvas 2D API for rendering
 - Cloudflare Pages for hosting
 
 **Project Structure:**
 ```
-src/
-└── lib.rs              # WASM entry point, exports App struct
-www/                    # HTML/CSS assets
-assets/sprites/         # PNG component icons
-wrangler.toml           # Cloudflare Pages config
+www/
+├── index.html          # Entry point, imports modules
+├── style.css           # Layout & component styles
+├── canvas.js           # Canvas rendering, pan/zoom, event handling
+├── palette.js          # Left sidebar with draggable components
+├── state.js            # Graph state management (CanvasState singleton)
+├── component-specs.js  # Component definitions with typed ports
+├── graph-model.js      # GraphSpec, NodeSpec, EdgeSpec classes
+├── components.js       # Legacy component definitions (deprecated)
+└── scene.js            # Legacy Three.js scene (deprecated)
 ```
 
-**Key Dependencies (Cargo.toml):**
-- `wasm-bindgen` - Rust <-> JS FFI
-- `web-sys` - Web API bindings (Canvas, WebGL, Events)
-- `ezing` - Animation easing functions
-- `serde/serde_json` - Serialization
+## Core Modules
 
-**Release Profile:**
-```toml
-[profile.release]
-lto = true
-opt-level = 's'  # Size optimization for WASM
-```
+### canvas.js - Rendering & Interaction
 
-## Implementation Notes
-
-- Three.js is accessed from Rust via JS interop, not native Rust bindings
-- Target: 60fps, <2s load time, works on Chrome/Firefox/Safari
-
-## Split-Screen Architecture (www/scene.js)
-
-The app uses a **split-screen comparison view** with two independent viewports:
-- **Left**: Pure Cloudflare stack (read-only reference)
-- **Right**: Mixed/customizable stack (user can swap components)
-
-**Key Constants:**
-- `LEFT_OFFSET = -5`, `RIGHT_OFFSET = 5` - X-axis positions for each column
-- `HEADER_HEIGHT_PX = 80` - Space reserved at top for column labels + dropdown
-- `currentViewShift` - Dynamic shift to leave room for info panels
-
-**Layer System (Three.js):**
-- Layer 1: Left side components (leftCamera sees only layer 1)
-- Layer 2: Right side components (rightCamera sees only layer 2)
-- Raycaster has both layers enabled for click detection
-
-**Key Patterns:**
-- `calculateCameraParams()` - Responsive camera positioning based on viewport
-- `createDebugBounds()` - Visual debugging (toggle with `DEBUG_BOUNDS` flag)
-- `leftColumnShift`/`rightColumnShift` - Animate components when info panel opens
-- `isReconstructing` flag - Prevents animate loop from conflicting with reconstruct animation
-
-**Info Panels:**
-- Two separate panels: `#info-panel-left` and `#info-panel-right`
-- Each side operates independently (clicking one doesn't close the other)
-- Uses class-based selectors (`.panel-title`, `.panel-description`, etc.)
-
-**UI Layout:**
-- Column labels at top (`#column-labels`) with provider dropdown in right label
-- Comparison table at bottom center (`#comparison-table`)
-- "How It Works" button at top center (`#controls`)
-- Viewport rendering excludes top 80px for header area
-
-## Component Labeling System (Two-Line Layout)
-
-Components use a **two-line educational layout**:
-- **Line 1 (Role)**: What it does - bold, white (e.g., "Edge Functions", "Key-Value Store")
-- **Line 2 (Product)**: Vendor + product name - gray, italic (e.g., "Cloudflare Workers")
-
-**Key data structures:**
-- `COMPONENTS[]` - Each has `id`, `name`, `role`, `color`, `pos`, `exploded`
-- `PROVIDER_COMPONENTS{}` - Full vendor+product names per provider (cf, aws, gcp, azure)
-- `getComponentRole(componentId)` - Helper to get role from COMPONENTS array
-
-**Rendering:**
-- `createLabelTexture(name, color, componentId, role)` - Creates 512x512 canvas texture
-- Two-line layout rendered at y=290 (role) and y=345 (product name)
-
-## Alternatives System (www/scene.js)
-
-**Database:**
-- `ALTERNATIVES{}` - Top 3 alternatives per component with metrics, docs, warnings
-- Entries for: `workers`, `pages`, `kv`, `d1`, `wasm`, `threejs`
+Main render loop using Canvas 2D API.
 
 **Key functions:**
-- `populateAlternativesDropdown(panel, componentId, editable)` - Populates dropdown from ALTERNATIVES
-- `showAlternativeDetails(panel, componentId, alternativeId)` - Shows metrics & warnings
-- `applyAlternativeToComponent(componentId, alternativeId, alternativeName)` - Actually switches component
-- `updateComponentTextureWithAlternative(mesh, name, color)` - Updates 3D texture
+- `initCanvas(element)` - Initialize canvas with event listeners
+- `draw()` - Main render function (called via requestAnimationFrame)
+- `drawGrid()` - Subtle grid background
+- `drawNodes()` - Render all nodes with ports
+- `drawEdges()` - Render bezier wire connections
+- `drawWirePreview()` - Preview wire during connection drag
 
-**Flow:**
-1. User clicks component on right side → `showInfoPanel()` with editable=true
-2. Dropdown populated from `ALTERNATIVES[componentId].options`
-3. User selects alternative → `showAlternativeDetails()` shows comparison
-4. User clicks "Apply" → `applyAlternativeToComponent()` switches texture/color
+**Event handling:**
+- Pan: middle-click drag or space+drag
+- Zoom: scroll wheel (zooms toward cursor)
+- Node selection: click
+- Wire creation: drag from output port to input port
+- Delete: Delete/Backspace key
 
-**State tracking:**
-- `selectedAlternatives{}` - Tracks which alternative is selected per component
-- `componentProviders{}` - Tracks which provider each component uses
-- `affectedComponents` - Set of components affected by current selection
+### state.js - Graph State Management
+
+Singleton `canvasState` manages all state.
+
+**Key properties:**
+```javascript
+canvasState.graph          // GraphSpec instance
+canvasState.graph.nodes    // Map<id, NodeSpec>
+canvasState.graph.edges    // Map<id, EdgeSpec>
+canvasState.selectedNodeIds // Set<id>
+canvasState.selectedEdgeIds // Set<id>
+canvasState.pan            // { x, y }
+canvasState.zoom           // number (0.25 - 4)
+canvasState.mode           // 'idle' | 'dragging' | 'connecting' | 'panning'
+canvasState.wirePreview    // Preview wire during connection
+```
+
+**Key methods:**
+```javascript
+canvasState.addNode(componentId, x, y)      // Add node at position
+canvasState.addEdge(srcNodeId, srcPortId, tgtNodeId, tgtPortId)
+canvasState.removeNode(nodeId)
+canvasState.removeEdge(edgeId)
+canvasState.selectNode(nodeId, additive)
+canvasState.deleteSelected()
+canvasState.getNodeAt(worldX, worldY)       // Hit testing
+canvasState.getPortAt(worldX, worldY)       // Port hit testing
+canvasState.screenToWorld(screenX, screenY) // Coordinate conversion
+canvasState.getNodePorts(node)              // Get typed ports for rendering
+```
+
+### component-specs.js - Type System
+
+Defines components with typed input/output ports. Inspired by [Unit](https://github.com/samuelmtimbo/unit).
+
+**Type definitions:**
+```javascript
+export const TYPES = {
+  HTTP_REQUEST: 'http-request',
+  HTTP_RESPONSE: 'http-response',
+  SQL_QUERY: 'sql-query',
+  SQL_RESULT: 'sql-result',
+  KV_OPERATION: 'kv-operation',
+  KV_RESULT: 'kv-result',
+  WASM_CALL: 'wasm-call',
+  WASM_RESULT: 'wasm-result',
+  RENDER_COMMAND: 'render-command',
+  STATIC_ASSET: 'static-asset',
+  ANY: 'any',
+};
+```
+
+**Component spec structure:**
+```javascript
+export const COMPONENT_SPECS = {
+  workers: {
+    id: 'workers',
+    name: 'Cloudflare Workers',
+    role: 'Edge Functions',
+    icon: '⚡',
+    color: '#F6821F',
+    category: 'compute',
+
+    inputs: {
+      request: { type: TYPES.HTTP_REQUEST, position: 'top' },
+      kvResult: { type: TYPES.KV_RESULT, position: 'left' },
+      sqlResult: { type: TYPES.SQL_RESULT, position: 'left-bottom' },
+    },
+
+    outputs: {
+      response: { type: TYPES.HTTP_RESPONSE, position: 'top' },
+      kvOp: { type: TYPES.KV_OPERATION, position: 'bottom-right' },
+      sqlQuery: { type: TYPES.SQL_QUERY, position: 'bottom-left' },
+    },
+
+    metadata: {
+      tags: ['compute', 'edge', 'serverless'],
+      provider: 'cloudflare',
+      alternatives: ['lambda-edge', 'vercel-edge'],
+    },
+  },
+  // ... other components
+};
+```
+
+**Key functions:**
+```javascript
+isTypeCompatible(sourceType, targetType)  // Validate connection
+getComponentSpec(componentId)             // Get spec by ID
+getTypeColor(type)                        // Get port color
+getPortOffset(position, width, height)    // Get port screen offset
+```
+
+### palette.js - Component Palette
+
+Left sidebar with draggable component cards.
+
+**Key functions:**
+- `initPalette(container)` - Render palette and setup drag listeners
+- `handleDragStart/End` - Manage drag state
+- `handleDrop` - Create node at drop position
+
+### graph-model.js - Data Structures
+
+Core graph classes (kept from original implementation).
+
+```javascript
+class GraphSpec {
+  nodes: Map<id, NodeSpec>
+  edges: Map<id, EdgeSpec>
+  addNode(node) / removeNode(nodeId)
+  addEdge(edge) / removeEdge(edgeId)
+}
+
+class NodeSpec {
+  id, componentId, position, width, height, color, name, role, icon
+}
+
+class EdgeSpec {
+  id, source: { nodeId, portId }, target: { nodeId, portId }
+}
+```
+
+## Port Positions
+
+Ports are positioned relative to node bounds:
+
+| Position | Location |
+|----------|----------|
+| `top` | Center top edge |
+| `top-left` | Left quarter of top edge |
+| `top-right` | Right quarter of top edge |
+| `bottom` | Center bottom edge |
+| `bottom-left` | Left quarter of bottom edge |
+| `bottom-right` | Right quarter of bottom edge |
+| `left` | Center left edge |
+| `left-top` | Upper half of left edge |
+| `left-bottom` | Lower half of left edge |
+| `right` | Center right edge |
+
+## Connection Validation
+
+Connections are validated using `TYPE_COMPATIBILITY` matrix:
+
+```javascript
+export const TYPE_COMPATIBILITY = {
+  [TYPES.HTTP_REQUEST]: [TYPES.HTTP_REQUEST, TYPES.ANY],
+  [TYPES.SQL_QUERY]: [TYPES.SQL_QUERY, TYPES.ANY],
+  [TYPES.SQL_RESULT]: [TYPES.SQL_RESULT, TYPES.JSON, TYPES.ANY],
+  // ...
+};
+```
+
+**Valid connection:** source type's compatible array includes target type
+**Invalid connection:** shown with red highlight during drag
+
+## Adding New Components
+
+1. Add spec to `COMPONENT_SPECS` in `component-specs.js`
+2. Component automatically appears in palette
+3. No other changes needed
+
+## Adding New Types
+
+1. Add to `TYPES` constant
+2. Add to `TYPE_COMPATIBILITY` matrix
+3. Add color to `getTypeColor()` function
+
+## Debugging
+
+```javascript
+// In browser console
+window.canvasState                    // Access state
+canvasState.graph.nodes.size          // Node count
+canvasState.graph.edges.size          // Edge count
+JSON.stringify(canvasState.toJSON())  // Export graph
+```
+
+## Legacy Code (Deprecated)
+
+The following files are from the old Three.js implementation and are no longer used:
+
+- `scene.js` - Three.js 3D scene (replaced by canvas.js)
+- `components.js` - Old component definitions (replaced by component-specs.js)
+- `bottom-sheet.css` - Bottom sheet styles
+- Various feature folders in `www/features/`
+
+These can be removed in a future cleanup.
