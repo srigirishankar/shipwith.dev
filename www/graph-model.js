@@ -19,10 +19,18 @@ export const PORT_TYPES = {
 // COMPONENT_PORTS: Define input/output ports for each component
 // ============================================
 export const COMPONENT_PORTS = {
+  user: {
+    inputs: [],
+    outputs: [{ type: 'http-out', position: 'bottom' }]
+  },
+  browser: {
+    inputs: [{ type: 'http-in', position: 'top' }],
+    outputs: [{ type: 'http-out', position: 'bottom' }]
+  },
   workers: {
     inputs: [{ type: 'http-in', position: 'top' }],
     outputs: [
-      { type: 'http-out', position: 'top' },
+      { type: 'http-out', position: 'bottom' },
       { type: 'sql-q', position: 'bottom-left' },
       { type: 'kv-op', position: 'bottom-right' }
     ]
@@ -148,6 +156,21 @@ export class NodeSpec {
     this.position = { x: position.x, y: position.y };
     this.locked = false;
     this.metadata = {};
+
+    // Simulation-relevant properties (populated by CanvasState.addNode)
+    this.config = {
+      capacity: { instances: 1, maxRPSPerInstance: 1000 },
+      scaling: { autoScale: false, minInstances: 1, maxInstances: 10 },
+      reliability: { failureProbability: 0.001, circuitBreaker: false },
+      cost: { perHour: 0.05, currency: 'USD' },
+      latency: { baseMs: 5, p95Multiplier: 1.8 },
+    };
+
+    this.provider = {
+      id: null,
+      name: null,
+      alternatives: [],
+    };
   }
 }
 
@@ -161,5 +184,13 @@ export class EdgeSpec {
     this.target = { nodeId: targetNodeId, portId: targetPortId };
     this.label = null;
     this.metadata = {};
+
+    // Connection properties
+    this.config = {
+      protocol: 'HTTPS',
+      sync: true,
+      latencyMs: 1,
+      retryPolicy: { maxRetries: 3, backoffMs: 100, backoffMultiplier: 2 },
+    };
   }
 }
